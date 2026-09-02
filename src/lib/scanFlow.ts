@@ -28,7 +28,11 @@ async function buildPage(docId: string, rawUri: string, mode: ScanMode): Promise
 export { scanDocument } from '../../modules/document-scanner';
 
 /** Processes freshly-scanned pages into a brand-new saved document. */
-export async function createDocFromScans(rawUris: string[], mode: ScanMode): Promise<ScanDoc> {
+export async function createDocFromScans(
+  rawUris: string[],
+  mode: ScanMode,
+  name?: string,
+): Promise<ScanDoc> {
   const docId = uid('doc-');
   const pages: Page[] = [];
   for (const raw of rawUris) {
@@ -38,7 +42,7 @@ export async function createDocFromScans(rawUris: string[], mode: ScanMode): Pro
   const now = Date.now();
   const doc: ScanDoc = {
     id: docId,
-    name: defaultScanName(new Date(now)),
+    name: name ?? defaultScanName(new Date(now)),
     mode,
     createdAt: now,
     updatedAt: now,
