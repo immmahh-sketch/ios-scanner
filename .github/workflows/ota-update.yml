@@ -19,6 +19,7 @@ on:
       - "android/**"
       - ".github/**"
       - "modules/**"
+      - "dist-server/**"
       - "**/*.md"
 
 concurrency:
@@ -27,6 +28,8 @@ concurrency:
 
 jobs:
   update:
+    # Skips cleanly until the EXPO_TOKEN repo secret is added.
+    if: ${{ secrets.EXPO_TOKEN != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
