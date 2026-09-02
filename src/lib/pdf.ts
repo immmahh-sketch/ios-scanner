@@ -1,5 +1,3 @@
-import { PDFDocument } from 'pdf-lib';
-import { decode as b64ToBytes, encode as bytesToB64 } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import type { ScanDoc } from '../types';
@@ -9,8 +7,14 @@ import { sanitizeFilename } from './names';
  * Builds a multi-page PDF from a document's pages. Each PDF page is sized to its
  * image so portrait and landscape pages keep their true orientation. Returns a
  * `file://` URI in the cache directory.
+ *
+ * `pdf-lib` and `base64-arraybuffer` are imported lazily so they stay off the
+ * app-startup path.
  */
 export async function buildPdf(doc: ScanDoc): Promise<string> {
+  const { PDFDocument } = await import('pdf-lib');
+  const { decode: b64ToBytes, encode: bytesToB64 } = await import('base64-arraybuffer');
+
   const pdf = await PDFDocument.create();
   pdf.setTitle(doc.name);
   pdf.setCreator('Scanner');
