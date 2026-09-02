@@ -1,6 +1,6 @@
 import DocumentScannerModule from './src/DocumentScannerModule';
 
-export type { ScannedPageUri } from './src/DocumentScanner.types';
+export type { ScannedPageUri, ProcessedImage } from './src/DocumentScanner.types';
 
 /**
  * Returns true when the current device supports VisionKit document scanning.
@@ -24,4 +24,12 @@ export async function scanDocument(): Promise<string[]> {
   return DocumentScannerModule.scan();
 }
 
-export default { isScannerAvailable, scanDocument };
+/**
+ * Applies one of the three colour looks to a scanned page and downscales it.
+ * `mode` is "bw" | "color-doc" | "color-photo"; `maxEdge` caps the longest side.
+ */
+export async function processImage(uri: string, mode: string, maxEdge = 2600) {
+  return DocumentScannerModule.processImage(uri, mode, maxEdge);
+}
+
+export default { isScannerAvailable, scanDocument, processImage };

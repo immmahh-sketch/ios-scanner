@@ -7,6 +7,7 @@ import { DarkTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { DocsProvider } from './src/state/DocsContext';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ReviewScreen } from './src/screens/ReviewScreen';
 import { ExportScreen } from './src/screens/ExportScreen';
@@ -31,27 +32,33 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <DocsProvider>
-          <StatusBar style="light" />
-          <NavigationContainer theme={navTheme}>
-            <Stack.Navigator
-              screenOptions={{
-                headerStyle: { backgroundColor: theme.colors.bg },
-                headerTintColor: theme.colors.text,
-                headerShadowVisible: false,
-                contentStyle: { backgroundColor: theme.colors.bg },
-              }}
-            >
-              <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
-              <Stack.Screen name="Review" component={ReviewScreen} options={{ title: 'Review' }} />
-              <Stack.Screen
-                name="Export"
-                component={ExportScreen}
-                options={{ title: 'Name & Send' }}
-              />
-            </Stack.Navigator>
-          </NavigationContainer>
-        </DocsProvider>
+        <ErrorBoundary>
+          <DocsProvider>
+            <StatusBar style="light" />
+            <NavigationContainer theme={navTheme}>
+              <Stack.Navigator
+                screenOptions={{
+                  headerStyle: { backgroundColor: theme.colors.bg },
+                  headerTintColor: theme.colors.text,
+                  headerShadowVisible: false,
+                  contentStyle: { backgroundColor: theme.colors.bg },
+                }}
+              >
+                <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="Review"
+                  component={ReviewScreen}
+                  options={{ title: 'Review' }}
+                />
+                <Stack.Screen
+                  name="Export"
+                  component={ExportScreen}
+                  options={{ title: 'Name & Send' }}
+                />
+              </Stack.Navigator>
+            </NavigationContainer>
+          </DocsProvider>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

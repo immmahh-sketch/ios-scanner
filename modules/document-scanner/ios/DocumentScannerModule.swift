@@ -1,23 +1,22 @@
 import ExpoModulesCore
 import VisionKit
 import UIKit
+import CoreImage
 
-// Local Expo module that wraps Apple's VisionKit document scanner
-// (VNDocumentCameraViewController). VisionKit provides, for free and on-device:
-//   - real-time document edge / corner detection
-//   - automatic shutter when the page is steady and in frame
-//   - "keep scanning" multi-page capture (shoot page after page)
-//   - perspective correction + upright output
-// We return the captured pages as JPEG file URLs; all colour-mode processing,
-// review UI, naming and export live in JS so they can be updated over-the-air.
+// Local Expo module:
+//   - `scan()`      wraps VisionKit's VNDocumentCameraViewController (edge
+//                   detection, auto-capture, multi-page, perspective correction).
+//   - `processImage()` applies one of three colour looks with Core Image and
+//                   downscales, returning a new JPEG + its pixel size.
 public class DocumentScannerModule: Module {
   private var delegateRef: ScannerDelegate?
+  private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
   public func definition() -> ModuleDefinition {
     Name("DocumentScanner")
 
     Function("isAvailable") { () -> Bool in
-      return VNDocumentCameraViewController.isSupported
+      VNDocumentCameraViewController.isSupported
     }
 
     AsyncFunction("scan") { (promise: Promise) in
@@ -31,12 +30,9 @@ public class DocumentScannerModule: Module {
         let delegate = ScannerDelegate { [weak self] result in
           self?.delegateRef = nil
           switch result {
-          case .success(let uris):
-            promise.resolve(uris)
-          case .cancelled:
-            promise.resolve([String]())
-          case .failure(let error):
-            promise.reject("E_SCAN_FAILED", error.localizedDescription)
+          case .success(let uris): promise.resolve(uris)
+          case .cancelled: promise.resolve([String]())
+          case .failure(let error): promise.reject("E_SCAN_FAILED", error.localizedDescription)
           }
         }
         self.delegateRef = delegate
@@ -54,6 +50,85 @@ public class DocumentScannerModule: Module {
         }
         presenter.present(scannerVC, animated: true)
       }
+    }
+
+    // mode: "bw" | "color-doc" | "color-photo". maxEdge: cap on the longest side.
+    AsyncFunction("processImage") { (uriString: String, mode: String, maxEdge: Double) -> [String: Any] in
+      guard let url = URL(string: uriString),
+            let input = CIImage(contentsOf: url, options: [.applyOrientationProperty: true])
+      else {
+        throw ProcessingError.cannotDecode
+      }
+
+      var image = input
+
+      // Downscale
+      let longest = max(image.extent.width, image.extent.height)
+      if maxEdge > 0, longest > CGFloat(maxEdge) {
+        let scale = CGFloat(maxEdge) / longest
+        image = image.applyingFilter("CILanczosScaleTransform", parameters: [
+          kCIInputScaleKey: scale,
+          kCIInputAspectRatioKey: 1.0,
+        ])
+      }
+
+      // Colour look
+      switch mode {
+      case "bw":
+        image = image.applyingFilter("CIColorControls", parameters: [
+          kCIInputSaturationKey: 0.0,
+          kCIInputContrastKey: 1.35,
+          kCIInputBrightnessKey: 0.06,
+        ])
+      case "color-doc":
+        image = image.applyingFilter("CIColorControls", parameters: [
+          kCIInputSaturationKey: 1.15,
+          kCIInputContrastKey: 1.12,
+          kCIInputBrightnessKey: 0.03,
+        ])
+        image = image.applyingFilter("CIVibrance", parameters: ["inputAmount": 0.25])
+      default: // "color-photo"
+        image = image.applyingFilter("CIColorControls", parameters: [
+          kCIInputSaturationKey: 1.06,
+          kCIInputContrastKey: 1.05,
+        ])
+      }
+
+      let rect = image.extent.integral
+      guard rect.width > 0, rect.height > 0,
+            let cgImage = self.ciContext.createCGImage(image, from: rect)
+      else {
+        throw ProcessingError.renderFailed
+      }
+
+      let uiImage = UIImage(cgImage: cgImage)
+      guard let data = uiImage.jpegData(compressionQuality: 0.92) else {
+        throw ProcessingError.encodeFailed
+      }
+
+      let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("processed", isDirectory: true)
+      try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+      let out = dir.appendingPathComponent("\(UUID().uuidString).jpg")
+      try data.write(to: out, options: .atomic)
+
+      return [
+        "uri": out.absoluteString,
+        "width": Int(rect.width),
+        "height": Int(rect.height),
+      ]
+    }
+  }
+}
+
+private enum ProcessingError: Error, LocalizedError {
+  case cannotDecode, renderFailed, encodeFailed
+
+  var errorDescription: String? {
+    switch self {
+    case .cannotDecode: return "Could not read the scanned image."
+    case .renderFailed: return "Could not render the processed image."
+    case .encodeFailed: return "Could not encode the processed image."
     }
   }
 }
