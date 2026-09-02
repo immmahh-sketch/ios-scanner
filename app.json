@@ -2,6 +2,7 @@
   "expo": {
     "name": "Scanner",
     "slug": "ios-scanner",
+    "owner": "immmahh",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,9 +12,12 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000",
+      "url": "https://u.expo.dev/6e968bde-03cf-4671-8263-6f0c0892bdf4",
       "fallbackToCacheTimeout": 0,
-      "checkAutomatically": "ON_LOAD"
+      "checkAutomatically": "ON_LOAD",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -31,6 +35,11 @@
       "expo-updates",
       "expo-mail-composer",
       "expo-sharing"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6e968bde-03cf-4671-8263-6f0c0892bdf4"
+      }
+    }
   }
 }
