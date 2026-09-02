@@ -20,7 +20,9 @@
         "expo-channel-name": "production"
       }
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.immmahh.scanner",
@@ -29,13 +31,17 @@
         "NSCameraUsageDescription": "Scanner uses the camera to detect document edges and capture pages.",
         "NSPhotoLibraryAddUsageDescription": "Scanner can save exported PDFs to your Photos.",
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["whatsapp", "mailto"]
+        "LSApplicationQueriesSchemes": [
+          "whatsapp",
+          "mailto"
+        ]
       }
     },
     "plugins": [
       "expo-updates",
       "expo-mail-composer",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

@@ -5,6 +5,22 @@ import * as Linking from 'expo-linking';
 const PDF_UTI = 'com.adobe.pdf';
 const PDF_MIME = 'application/pdf';
 
+const TYPE_BY_EXT: Record<string, { uti: string; mime: string }> = {
+  pdf: { uti: 'com.adobe.pdf', mime: 'application/pdf' },
+  csv: { uti: 'public.comma-separated-values-text', mime: 'text/csv' },
+  zip: { uti: 'public.zip-archive', mime: 'application/zip' },
+};
+
+/** Opens the iOS share sheet for any file; picks the right UTI from its extension. */
+export async function shareFile(uri: string, dialogTitle: string): Promise<void> {
+  if (!(await Sharing.isAvailableAsync())) {
+    throw new Error('Sharing is not available on this device.');
+  }
+  const ext = uri.split('.').pop()?.toLowerCase() ?? '';
+  const t = TYPE_BY_EXT[ext] ?? { uti: 'public.data', mime: 'application/octet-stream' };
+  await Sharing.shareAsync(uri, { UTI: t.uti, mimeType: t.mime, dialogTitle });
+}
+
 export async function emailPdf(pdfUri: string, name: string): Promise<void> {
   const available = await MailComposer.isAvailableAsync();
   if (!available) {

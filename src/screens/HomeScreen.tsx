@@ -6,8 +6,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { BusyOverlay } from '../components/ui';
 import { useDocs } from '../state/DocsContext';
 import { createDocFromScans, scanDocument } from '../lib/scanFlow';
-import { PRESETS, presetName, type ScanPreset } from '../lib/presets';
 import { nextCount } from '../lib/counters';
+import { pad4 } from '../lib/names';
+import { expenseDocName, type ExpenseKind } from '../lib/receipts';
+import { analyzeMeetingNotes, analyzeReceipt, analyzeRightToWork } from '../lib/ai';
 import { applyOta, checkForOta, runtimeVersion } from '../lib/updates';
 import { isScannerAvailable } from '../../modules/document-scanner';
 import { theme } from '../theme';
@@ -15,8 +17,17 @@ import { MODE_LABELS } from '../types';
 import type { ScanDoc } from '../types';
 import type { ScreenProps } from '../navigation';
 
+type Step = 'root' | 'document' | 'receipt';
+
+type ScanConfig =
+  | { kind: 'rtw' }
+  | { kind: 'meeting' }
+  | { kind: 'other' }
+  | { kind: 'receipt'; receiptKind: ExpenseKind };
+
 export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
   const { docs, loading, refresh, putDoc, removeDoc } = useDocs();
+  const [step, setStep] = useState<Step>('root');
   const [busy, setBusy] = useState<string | null>(null);
   const [otaReady, setOtaReady] = useState(false);
 
@@ -27,17 +38,17 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
   useFocusEffect(
     useCallback(() => {
       void refresh();
+      setStep('root');
     }, [refresh]),
   );
 
-  const startPreset = useCallback(
-    async (preset: ScanPreset) => {
+  const runScan = useCallback(
+    async (cfg: ScanConfig) => {
       if (!isScannerAvailable()) {
         Alert.alert('Not supported', 'Document scanning needs a real device with a camera.');
         return;
       }
-
-      // Scanner launches with nothing else on screen (no modal / overlay).
+      // Scanner opens on a clean screen (no overlay / no modal).
       let rawUris: string[];
       try {
         rawUris = await scanDocument();
@@ -45,18 +56,50 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
         Alert.alert('Scan failed', err instanceof Error ? err.message : String(err));
         return;
       }
-      if (rawUris.length === 0) return; // cancelled
+      if (rawUris.length === 0) return;
 
+      const first = rawUris[0];
       try {
-        setBusy('Processing pages…');
-        const count = await nextCount(preset.namePrefix);
-        const doc = await createDocFromScans(rawUris, preset.mode, presetName(preset.namePrefix, count));
-        putDoc(doc);
-        navigation.navigate('Review', { docId: doc.id });
+        if (cfg.kind === 'rtw') {
+          setBusy('Reading ID…');
+          const ai = await analyzeRightToWork(first);
+          const name = ai?.personName ? `RTW ${ai.personName}` : `RTW ${pad4(await nextCount('RTW'))}`;
+          setBusy('Processing pages…');
+          const doc = await createDocFromScans(rawUris, 'color-doc', name);
+          putDoc(doc);
+          navigation.navigate('Review', { docId: doc.id });
+        } else if (cfg.kind === 'meeting') {
+          setBusy('Reading meeting notes…');
+          const ai = await analyzeMeetingNotes(first);
+          const name = ai
+            ? ai.personName
+              ? `${ai.meetingType} ${ai.personName}`
+              : ai.meetingType
+            : `Meeting notes ${pad4(await nextCount('Meeting notes'))}`;
+          setBusy('Processing pages…');
+          const doc = await createDocFromScans(rawUris, 'bw', name);
+          putDoc(doc);
+          navigation.navigate('Review', { docId: doc.id });
+        } else if (cfg.kind === 'other') {
+          setBusy('Processing pages…');
+          const name = `Scan ${pad4(await nextCount('Scan'))}`;
+          const doc = await createDocFromScans(rawUris, 'bw', name);
+          putDoc(doc);
+          navigation.navigate('Review', { docId: doc.id });
+        } else {
+          setBusy('Reading receipt…');
+          const ai = await analyzeReceipt(first);
+          const name = expenseDocName(cfg.receiptKind, ai?.supplier ?? '', ai?.date ?? '');
+          setBusy('Processing pages…');
+          const doc = await createDocFromScans(rawUris, 'bw', name);
+          putDoc(doc);
+          navigation.navigate('ReceiptDetails', { docId: doc.id, kind: cfg.receiptKind, ai });
+        }
       } catch (err) {
-        Alert.alert('Processing failed', err instanceof Error ? err.message : String(err));
+        Alert.alert('Scan failed', err instanceof Error ? err.message : String(err));
       } finally {
         setBusy(null);
+        setStep('root');
       }
     },
     [navigation, putDoc],
@@ -88,9 +131,39 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
     </Pressable>
   );
 
+  const header = (
+    <View style={styles.choiceBlock}>
+      {step === 'root' ? (
+        <>
+          <Text style={styles.sectionTitle}>New scan</Text>
+          <Choice title="Scan a document" subtitle="ID checks, meeting notes, anything on paper" onPress={() => setStep('document')} />
+          <Choice title="Scan a receipt" subtitle="Petty cash or credit card — auto-logged to a CSV" onPress={() => setStep('receipt')} />
+          <View style={styles.utilRow}>
+            <SmallButton label="⤓  Downloads" onPress={() => navigation.navigate('Downloads')} />
+            <SmallButton label="⚙  Settings" onPress={() => navigation.navigate('Settings')} />
+          </View>
+          {docs.length > 0 ? <Text style={styles.sectionTitle}>Recent</Text> : null}
+        </>
+      ) : step === 'document' ? (
+        <>
+          <BackRow label="Document" onBack={() => setStep('root')} />
+          <Choice title="Right to work" subtitle="Colour · names the file “RTW <name>”" onPress={() => runScan({ kind: 'rtw' })} />
+          <Choice title="Meeting notes" subtitle="B&W · reads the meeting type + employee name" onPress={() => runScan({ kind: 'meeting' })} />
+          <Choice title="Other document" subtitle="B&W · “Scan 0001”" onPress={() => runScan({ kind: 'other' })} />
+        </>
+      ) : (
+        <>
+          <BackRow label="Receipt" onBack={() => setStep('root')} />
+          <Choice title="Petty cash" subtitle="B&W · logs to the petty-cash CSV" onPress={() => runScan({ kind: 'receipt', receiptKind: 'petty' })} />
+          <Choice title="Credit card" subtitle="B&W · logs to the credit-card CSV" onPress={() => runScan({ kind: 'receipt', receiptKind: 'credit' })} />
+        </>
+      )}
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
+      <View style={styles.headerBar}>
         <Text style={styles.title}>Scanner</Text>
         <Text style={styles.version}>v{runtimeVersion}</Text>
       </View>
@@ -102,30 +175,14 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
       ) : null}
 
       <FlatList
-        data={docs}
+        data={step === 'root' ? docs : []}
         keyExtractor={(d) => d.id}
         contentContainerStyle={styles.list}
-        ListHeaderComponent={
-          <View style={styles.presetBlock}>
-            <Text style={styles.sectionTitle}>What are you scanning?</Text>
-            {PRESETS.map((preset) => (
-              <Pressable
-                key={preset.id}
-                style={({ pressed }) => [styles.presetCard, pressed && styles.pressed]}
-                onPress={() => startPreset(preset)}
-              >
-                <View style={styles.rowBody}>
-                  <Text style={styles.presetTitle}>{preset.title}</Text>
-                  <Text style={styles.rowSub}>{preset.subtitle}</Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            ))}
-            {docs.length > 0 ? <Text style={styles.sectionTitle}>Recent</Text> : null}
-          </View>
-        }
+        ListHeaderComponent={header}
         ListEmptyComponent={
-          loading ? null : <Text style={styles.empty}>Your scans will appear here.</Text>
+          step === 'root' && !loading ? (
+            <Text style={styles.empty}>Your scans will appear here.</Text>
+          ) : null
         }
         renderItem={renderRecent}
       />
@@ -135,9 +192,41 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
   );
 }
 
+function Choice({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+  return (
+    <Pressable style={({ pressed }) => [styles.choice, pressed && styles.pressed]} onPress={onPress}>
+      <View style={styles.rowBody}>
+        <Text style={styles.choiceTitle}>{title}</Text>
+        <Text style={styles.rowSub}>{subtitle}</Text>
+      </View>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+}
+
+function BackRow({ label, onBack }: { label: string; onBack: () => void }) {
+  return (
+    <Pressable style={styles.backRow} onPress={onBack}>
+      <Text style={styles.backChevron}>‹</Text>
+      <Text style={styles.sectionTitle}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SmallButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.smallBtn, pressed && styles.pressed]}
+      onPress={onPress}
+    >
+      <Text style={styles.smallBtnText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  header: {
+  headerBar: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
@@ -156,7 +245,7 @@ const styles = StyleSheet.create({
   },
   otaText: { color: theme.colors.accent, fontSize: 13, fontWeight: '600', textAlign: 'center' },
   list: { padding: 16, gap: 10, flexGrow: 1 },
-  presetBlock: { gap: 10, marginBottom: 4 },
+  choiceBlock: { gap: 10, marginBottom: 4 },
   sectionTitle: {
     color: theme.colors.textDim,
     fontSize: 13,
@@ -165,16 +254,27 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 8,
   },
-  presetCard: {
+  choice: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius,
-    padding: 16,
+    padding: 18,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.border,
   },
-  presetTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '600' },
+  choiceTitle: { color: theme.colors.text, fontSize: 17, fontWeight: '600' },
+  utilRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  smallBtn: {
+    flex: 1,
+    backgroundColor: theme.colors.surfaceAlt,
+    borderRadius: theme.radius,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  smallBtnText: { color: theme.colors.text, fontSize: 14, fontWeight: '600' },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  backChevron: { color: theme.colors.accent, fontSize: 26, marginTop: -2 },
   empty: { color: theme.colors.textDim, textAlign: 'center', marginTop: 24, fontSize: 14 },
   row: {
     flexDirection: 'row',

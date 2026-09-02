@@ -11,6 +11,9 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ReviewScreen } from './src/screens/ReviewScreen';
 import { ExportScreen } from './src/screens/ExportScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { DownloadsScreen } from './src/screens/DownloadsScreen';
+import { ReceiptDetailsScreen } from './src/screens/ReceiptDetailsScreen';
 import { theme } from './src/theme';
 import type { RootStackParamList } from './src/navigation';
 
@@ -54,6 +57,21 @@ export default function App() {
                   name="Export"
                   component={ExportScreen}
                   options={{ title: 'Name & Send' }}
+                />
+                <Stack.Screen
+                  name="ReceiptDetails"
+                  component={ReceiptDetailsScreen}
+                  options={{ title: 'Receipt' }}
+                />
+                <Stack.Screen
+                  name="Downloads"
+                  component={DownloadsScreen}
+                  options={{ title: 'Downloads' }}
+                />
+                <Stack.Screen
+                  name="Settings"
+                  component={SettingsScreen}
+                  options={{ title: 'Settings' }}
                 />
               </Stack.Navigator>
             </NavigationContainer>

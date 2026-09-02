@@ -8,6 +8,11 @@ export function sanitizeFilename(name: string): string {
   return cleaned.length ? cleaned : 'Scan';
 }
 
+/** Zero-pads to 4 digits: 1 -> "0001". */
+export function pad4(n: number): string {
+  return String(n).padStart(4, '0');
+}
+
 /** Default name suggested when a new scan is created, e.g. "Scan 2026-09-02 14.05". */
 export function defaultScanName(date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
