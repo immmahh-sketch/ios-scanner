@@ -34,7 +34,9 @@
     "prebuild": "expo prebuild -p ios --clean",
     "ota": "eas update --branch production --auto",
     "doctor": "expo-doctor",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "serve": "node dist-server/server.js",
+    "serve:pull": "node dist-server/pull-latest.mjs"
   },
   "private": true
 }

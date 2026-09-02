@@ -95,6 +95,19 @@ Apple ID:
 Free Apple IDs: the app runs for 7 days, then re-install. A paid Apple Developer
 account extends this to 1 year.
 
+### Download to the iPhone over WiFi
+
+`dist-server/` is a zero-dependency LAN server (like the Till APK one, but on
+port **8010** so both can run together):
+
+```bash
+npm run serve:pull   # pull the newest CI-built IPA into dist-server/ (needs gh)
+npm run serve         # serve it; prints the http://<LAN-IP>:8010 URL
+```
+
+Open that URL in Safari on the iPhone, tap to download the `.ipa` (lands in
+Files), then import it into SideStore / AltStore / TrollStore / Sideloadly.
+
 ---
 
 ## Making changes
