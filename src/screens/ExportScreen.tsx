@@ -51,14 +51,23 @@ export function ExportScreen({ route, navigation }: ScreenProps<'Export'>) {
 
   const withPdf = useCallback(
     async (label: string, action: (uri: string) => Promise<void>) => {
+      // Build the PDF under the busy overlay...
+      let uri: string;
       try {
         setBusy(label);
-        const uri = await ensurePdf();
+        uri = await ensurePdf();
+      } catch (err) {
+        Alert.alert('Export failed', err instanceof Error ? err.message : String(err));
+        return;
+      } finally {
+        setBusy(null);
+      }
+      // ...then run the action (mail / share sheet) with NO overlay up, so the
+      // native sheet presents on a clean screen.
+      try {
         await action(uri);
       } catch (err) {
         Alert.alert('Export failed', err instanceof Error ? err.message : String(err));
-      } finally {
-        setBusy(null);
       }
     },
     [ensurePdf],

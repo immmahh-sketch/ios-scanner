@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Button, BusyOverlay } from '../components/ui';
 import { ModeSheet } from '../components/ModeSheet';
 import { useDocs } from '../state/DocsContext';
-import { runNewScan } from '../lib/scanFlow';
+import { createDocFromScans, scanDocument } from '../lib/scanFlow';
 import { applyOta, checkForOta, runtimeVersion } from '../lib/updates';
 import { isScannerAvailable } from '../../modules/document-scanner';
 import { theme } from '../theme';
@@ -16,6 +16,7 @@ import type { ScreenProps } from '../navigation';
 export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
   const { docs, loading, refresh, putDoc, removeDoc } = useDocs();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [pendingMode, setPendingMode] = useState<ScanMode | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [otaReady, setOtaReady] = useState(false);
 
@@ -27,22 +28,31 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
     void refresh();
   }, [refresh]));
 
+  // Runs only after the mode sheet has fully closed, so the native scanner
+  // view controller is presented on a clean screen (no RN <Modal> up).
   const startScan = useCallback(
     async (mode: ScanMode) => {
-      setSheetOpen(false);
       if (!isScannerAvailable()) {
         Alert.alert('Not supported', 'Document scanning needs a real device with a camera.');
         return;
       }
+
+      let rawUris: string[];
       try {
-        setBusy('Processing pages…');
-        const doc = await runNewScan(mode);
-        if (doc) {
-          putDoc(doc);
-          navigation.navigate('Review', { docId: doc.id });
-        }
+        rawUris = await scanDocument();
       } catch (err) {
         Alert.alert('Scan failed', err instanceof Error ? err.message : String(err));
+        return;
+      }
+      if (rawUris.length === 0) return; // cancelled
+
+      try {
+        setBusy('Processing pages…');
+        const doc = await createDocFromScans(rawUris, mode);
+        putDoc(doc);
+        navigation.navigate('Review', { docId: doc.id });
+      } catch (err) {
+        Alert.alert('Processing failed', err instanceof Error ? err.message : String(err));
       } finally {
         setBusy(null);
       }
@@ -110,7 +120,19 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
         <Button title="New Scan" icon="＋" onPress={() => setSheetOpen(true)} />
       </View>
 
-      <ModeSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} onPick={startScan} />
+      <ModeSheet
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onPick={(mode) => {
+          setPendingMode(mode);
+          setSheetOpen(false);
+        }}
+        onClosed={() => {
+          const mode = pendingMode;
+          setPendingMode(null);
+          if (mode) void startScan(mode);
+        }}
+      />
       <BusyOverlay visible={busy !== null} label={busy ?? undefined} />
     </SafeAreaView>
   );

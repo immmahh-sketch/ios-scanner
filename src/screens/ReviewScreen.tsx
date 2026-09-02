@@ -4,7 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, BusyOverlay } from '../components/ui';
 import { useDocs } from '../state/DocsContext';
-import { addPages, deletePage, movePage, retakePage, rotatePage } from '../lib/scanFlow';
+import {
+  appendScans,
+  deletePage,
+  movePage,
+  replacePageWithScan,
+  rotatePage,
+  scanDocument,
+} from '../lib/scanFlow';
 import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
 
@@ -28,6 +35,22 @@ export function ReviewScreen({ route, navigation }: ScreenProps<'Review'>) {
       }
     },
     [],
+  );
+
+  // Launch the native scanner with no busy overlay up, then process.
+  const scanThen = useCallback(
+    async (apply: (rawUris: string[]) => Promise<void>) => {
+      let rawUris: string[];
+      try {
+        rawUris = await scanDocument();
+      } catch (err) {
+        Alert.alert('Scan failed', err instanceof Error ? err.message : String(err));
+        return;
+      }
+      if (rawUris.length === 0) return;
+      await run('Processing…', () => apply(rawUris));
+    },
+    [run],
   );
 
   const pageCount = doc?.pages.length ?? 0;
@@ -77,7 +100,7 @@ export function ReviewScreen({ route, navigation }: ScreenProps<'Review'>) {
               <ActionButton
                 label="Retake"
                 onPress={() =>
-                  run('Opening scanner…', async () => putDoc(await retakePage(doc, page.id)))
+                  scanThen(async (raw) => putDoc(await replacePageWithScan(doc, page.id, raw[0])))
                 }
               />
               <ActionButton
@@ -124,7 +147,7 @@ export function ReviewScreen({ route, navigation }: ScreenProps<'Review'>) {
             title="Add pages"
             kind="secondary"
             icon="＋"
-            onPress={() => run('Opening scanner…', async () => putDoc(await addPages(doc)))}
+            onPress={() => scanThen(async (raw) => putDoc(await appendScans(doc, raw)))}
           />
         </View>
         <View style={styles.footerItem}>

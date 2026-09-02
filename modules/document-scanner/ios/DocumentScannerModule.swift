@@ -38,17 +38,30 @@ public class DocumentScannerModule: Module {
         self.delegateRef = delegate
         scannerVC.delegate = delegate
 
-        let presenter = self.appContext?.utilities?.currentViewController()
+        // Walk to the top-most presented controller so we never try to present
+        // on a controller that is itself mid-transition.
+        var presenter = self.appContext?.utilities?.currentViewController()
           ?? UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.keyWindow }
             .first?.rootViewController
+        while let presented = presenter?.presentedViewController, !presented.isBeingDismissed {
+          presenter = presented
+        }
 
         guard let presenter else {
           self.delegateRef = nil
           promise.reject("E_NO_PRESENTER", "Could not find a view controller to present the scanner.")
           return
         }
-        presenter.present(scannerVC, animated: true)
+
+        presenter.present(scannerVC, animated: true) { [weak self, weak scannerVC] in
+          // If the presentation didn't take (e.g. a competing modal), make sure
+          // the JS promise still settles instead of hanging forever.
+          if scannerVC?.presentingViewController == nil {
+            self?.delegateRef = nil
+            promise.resolve([String]())
+          }
+        }
       }
     }
 

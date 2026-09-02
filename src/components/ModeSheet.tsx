@@ -10,11 +10,20 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onPick: (mode: ScanMode) => void;
+  /** Fires once the sheet has fully animated away (iOS). Use this to launch
+   *  anything that presents its own screen, so it lands on a clean hierarchy. */
+  onClosed?: () => void;
 }
 
-export function ModeSheet({ visible, onClose, onPick }: Props) {
+export function ModeSheet({ visible, onClose, onPick, onClosed }: Props) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      onDismiss={onClosed}
+    >
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />

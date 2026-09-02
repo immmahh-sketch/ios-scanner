@@ -1,5 +1,3 @@
-import { scanDocument } from '../../modules/document-scanner';
-
 import type { Page, ScanDoc, ScanMode } from '../types';
 import { uid } from './ids';
 import { defaultScanName } from './names';
@@ -21,11 +19,16 @@ async function buildPage(docId: string, rawUri: string, mode: ScanMode): Promise
   };
 }
 
-/** Launches the scanner, processes every captured page, saves a new document. */
-export async function runNewScan(mode: ScanMode): Promise<ScanDoc | null> {
-  const rawUris = await scanDocument();
-  if (rawUris.length === 0) return null;
+// The scanner (a native full-screen view controller) must be launched with NO
+// React Native <Modal> on screen, or iOS refuses the presentation and the
+// scanner's completion callback never fires. So callers do:
+//   1. await scanDocument()            <- no busy overlay, no mode sheet
+//   2. show a busy overlay
+//   3. await createDocFromScans(...)   <- CPU work, overlay is fine here
+export { scanDocument } from '../../modules/document-scanner';
 
+/** Processes freshly-scanned pages into a brand-new saved document. */
+export async function createDocFromScans(rawUris: string[], mode: ScanMode): Promise<ScanDoc> {
   const docId = uid('doc-');
   const pages: Page[] = [];
   for (const raw of rawUris) {
@@ -45,11 +48,8 @@ export async function runNewScan(mode: ScanMode): Promise<ScanDoc | null> {
   return doc;
 }
 
-/** Scans more pages and appends them to an existing document. */
-export async function addPages(doc: ScanDoc): Promise<ScanDoc> {
-  const rawUris = await scanDocument();
-  if (rawUris.length === 0) return doc;
-
+/** Processes freshly-scanned pages and appends them to an existing document. */
+export async function appendScans(doc: ScanDoc, rawUris: string[]): Promise<ScanDoc> {
   const pages = [...doc.pages];
   for (const raw of rawUris) {
     pages.push(await buildPage(doc.id, raw, doc.mode));
@@ -59,12 +59,13 @@ export async function addPages(doc: ScanDoc): Promise<ScanDoc> {
   return next;
 }
 
-/** Re-scans a single page, replacing it in place. */
-export async function retakePage(doc: ScanDoc, pageId: string): Promise<ScanDoc> {
-  const rawUris = await scanDocument();
-  if (rawUris.length === 0) return doc;
-
-  const replacement = await buildPage(doc.id, rawUris[0], doc.mode);
+/** Processes one freshly-scanned page and replaces an existing page in place. */
+export async function replacePageWithScan(
+  doc: ScanDoc,
+  pageId: string,
+  rawUri: string,
+): Promise<ScanDoc> {
+  const replacement = await buildPage(doc.id, rawUri, doc.mode);
   const pages = doc.pages.map((p) => (p.id === pageId ? { ...replacement, id: pageId } : p));
   const next = { ...doc, pages };
   await upsertDoc(next);
