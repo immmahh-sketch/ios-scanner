@@ -56,20 +56,15 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Setup EAS
-        if: steps.gate.outputs.enabled == 'true'
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
       - name: Install dependencies
         if: steps.gate.outputs.enabled == 'true'
         run: npm ci
 
       - name: Publish update
         if: steps.gate.outputs.enabled == 'true'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           MSG="${{ github.event.inputs.message }}"
           [ -n "$MSG" ] || MSG="$(git log -1 --pretty=%s)"
-          eas update --branch production --message "$MSG" --non-interactive
+          npx --yes eas-cli@latest update --branch production --message "$MSG" --non-interactive
