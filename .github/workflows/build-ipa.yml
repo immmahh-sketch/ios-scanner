@@ -1,0 +1,109 @@
+name: Build unsigned IPA
+
+# Produces an UNSIGNED .ipa for sideloading (AltStore / SideStore / Sideloadly,
+# which re-sign on-device with your Apple ID). No Apple Developer account or
+# signing certificate is used here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional tag to attach the IPA to a GitHub Release (e.g. v1.0.0)"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Expo prebuild (generate native iOS project)
+        run: npx expo prebuild --platform ios --no-install --clean
+        env:
+          EXPO_NO_TELEMETRY: "1"
+
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install --repo-update
+
+      - name: Resolve scheme / workspace
+        id: xc
+        working-directory: ios
+        run: |
+          WORKSPACE=$(ls -d *.xcworkspace | head -n1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          echo "workspace=$WORKSPACE" >> "$GITHUB_OUTPUT"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "Using workspace=$WORKSPACE scheme=$SCHEME"
+
+      - name: Archive (code signing disabled)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace "${{ steps.xc.outputs.workspace }}" \
+            -scheme "${{ steps.xc.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" \
+            clean archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            | xcpretty || true
+          test -d "$PWD/build/App.xcarchive/Products/Applications" || {
+            echo "Archive failed - no .app produced"; exit 1; }
+
+      - name: Package .ipa
+        working-directory: ios/build
+        run: |
+          APP=$(ls -d App.xcarchive/Products/Applications/*.app | head -n1)
+          echo "Packaging $APP"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP" Payload/
+          NAME="Scanner-unsigned-${{ github.ref_name }}.ipa"
+          [ "${{ github.ref_type }}" = "tag" ] || NAME="Scanner-unsigned.ipa"
+          /usr/bin/zip -qry "$NAME" Payload
+          echo "IPA_NAME=$NAME" >> "$GITHUB_ENV"
+          ls -lh "$NAME"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-unsigned-ipa
+          path: ios/build/*.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to Release
+        if: github.ref_type == 'tag' || inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
+          files: ios/build/*.ipa
+          fail_on_unmatched_files: true

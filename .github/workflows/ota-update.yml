@@ -1,0 +1,55 @@
+name: Publish OTA update
+
+# Pushes a new JavaScript bundle to the "production" EAS Update channel.
+# The installed app checks this channel on launch and downloads changes — no
+# rebuild / re-sideload needed, as long as the native runtime is unchanged
+# (i.e. you did not add/upgrade a native module or bump the app version).
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Update message"
+        required: false
+        default: "Manual OTA update"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "ios/**"
+      - "android/**"
+      - ".github/**"
+      - "modules/**"
+      - "**/*.md"
+
+concurrency:
+  group: ota-update
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish update
+        run: |
+          MSG="${{ github.event.inputs.message }}"
+          [ -n "$MSG" ] || MSG="$(git log -1 --pretty=%s)"
+          eas update --branch production --message "$MSG" --non-interactive

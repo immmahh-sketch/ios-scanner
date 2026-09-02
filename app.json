@@ -1,25 +1,36 @@
 {
   "expo": {
-    "name": "ios-scanner",
+    "name": "Scanner",
     "slug": "ios-scanner",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "scanner",
     "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
+    "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.immmahh.scanner",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scanner uses the camera to detect document edges and capture pages.",
+        "NSPhotoLibraryAddUsageDescription": "Scanner can save exported PDFs to your Photos.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["whatsapp", "mailto"]
+      }
     },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      "expo-updates",
+      "expo-mail-composer",
+      "expo-sharing"
+    ]
   }
 }

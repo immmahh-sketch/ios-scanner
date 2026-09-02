@@ -1,20 +1,58 @@
+import 'react-native-gesture-handler';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { DarkTheme, NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+import { DocsProvider } from './src/state/DocsContext';
+import { HomeScreen } from './src/screens/HomeScreen';
+import { ReviewScreen } from './src/screens/ReviewScreen';
+import { ExportScreen } from './src/screens/ExportScreen';
+import { theme } from './src/theme';
+import type { RootStackParamList } from './src/navigation';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+const navTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: theme.colors.bg,
+    card: theme.colors.bg,
+    text: theme.colors.text,
+    border: theme.colors.border,
+    primary: theme.colors.accent,
+  },
+};
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <DocsProvider>
+          <StatusBar style="light" />
+          <NavigationContainer theme={navTheme}>
+            <Stack.Navigator
+              screenOptions={{
+                headerStyle: { backgroundColor: theme.colors.bg },
+                headerTintColor: theme.colors.text,
+                headerShadowVisible: false,
+                contentStyle: { backgroundColor: theme.colors.bg },
+              }}
+            >
+              <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="Review" component={ReviewScreen} options={{ title: 'Review' }} />
+              <Stack.Screen
+                name="Export"
+                component={ExportScreen}
+                options={{ title: 'Name & Send' }}
+              />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </DocsProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
