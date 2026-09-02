@@ -17,7 +17,8 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    # macos-26 ships Xcode 26.4 (Swift 6.3), which Expo SDK 57 / RN 0.86 require.
+    runs-on: macos-26
     timeout-minutes: 60
 
     steps:
@@ -32,10 +33,9 @@ jobs:
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          # expo-modules-core's Package.swift needs Swift tools 6.2 (Xcode 26.x),
-          # so 16.x can't resolve it. Xcode 26.3 tightened Swift/C++ interop in a
-          # way that breaks expo-modules-jsi, so pin to 26.2.
-          xcode-version: "26.2"
+          # SDK 57 needs Xcode 26.4+ / Swift 6.3 (expo-modules-jsi fails to build
+          # on anything older). macos-26's stable Xcode is 26.4.
+          xcode-version: latest-stable
 
       - name: Setup Node
         uses: actions/setup-node@v4
