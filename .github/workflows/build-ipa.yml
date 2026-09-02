@@ -18,16 +18,23 @@ on:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: List available Xcode versions
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          xcodebuild -version || true
+
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          # Expo SDK 57 / RN 0.86 build cleanly on Xcode 16.x. Xcode 26's stricter
+          # Swift/C++ interop rejects expo-modules-jsi headers.
+          xcode-version: "16"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -57,46 +64,45 @@ jobs:
           echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
           echo "Using workspace=$WORKSPACE scheme=$SCHEME"
 
-      - name: Archive (code signing disabled)
+      - name: Build device app (code signing disabled)
         working-directory: ios
         run: |
-          set -o pipefail
+          set -euo pipefail
           xcodebuild \
             -workspace "${{ steps.xc.outputs.workspace }}" \
             -scheme "${{ steps.xc.outputs.scheme }}" \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -archivePath "$PWD/build/App.xcarchive" \
-            clean archive \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
-            EXPANDED_CODE_SIGN_IDENTITY="" \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
-            | xcpretty || true
-          test -d "$PWD/build/App.xcarchive/Products/Applications" || {
-            echo "Archive failed - no .app produced"; exit 1; }
+            EXPANDED_CODE_SIGNING_ALLOWED=NO \
+            clean build
 
       - name: Package .ipa
-        working-directory: ios/build
+        working-directory: ios
         run: |
-          APP=$(ls -d App.xcarchive/Products/Applications/*.app | head -n1)
+          set -euo pipefail
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n1)
+          if [ -z "$APP" ]; then echo "No .app produced"; exit 1; fi
           echo "Packaging $APP"
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
-          NAME="Scanner-unsigned-${{ github.ref_name }}.ipa"
-          [ "${{ github.ref_type }}" = "tag" ] || NAME="Scanner-unsigned.ipa"
+          NAME="Scanner-unsigned.ipa"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            NAME="Scanner-unsigned-${{ github.ref_name }}.ipa"
+          fi
           /usr/bin/zip -qry "$NAME" Payload
-          echo "IPA_NAME=$NAME" >> "$GITHUB_ENV"
           ls -lh "$NAME"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: scanner-unsigned-ipa
-          path: ios/build/*.ipa
+          path: ios/*.ipa
           if-no-files-found: error
           retention-days: 30
 
@@ -105,5 +111,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
-          files: ios/build/*.ipa
+          files: ios/*.ipa
           fail_on_unmatched_files: true
