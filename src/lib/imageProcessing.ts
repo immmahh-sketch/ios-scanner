@@ -21,34 +21,34 @@ const SKSL = `
 uniform shader image;
 uniform float mode;
 
-half3 sat(half3 rgb, half amount) {
-  half l = dot(rgb, half3(0.2126, 0.7152, 0.0722));
-  return clamp(mix(half3(l), rgb, amount), 0.0, 1.0);
+const float3 LUMA = float3(0.2126, 0.7152, 0.0722);
+
+float3 saturate3(float3 rgb, float amount) {
+  float l = dot(rgb, LUMA);
+  return clamp(mix(float3(l), rgb, amount), 0.0, 1.0);
 }
 
 half4 main(float2 xy) {
-  half4 c = image.eval(xy);
-  half3 rgb = c.rgb;
+  float4 c = float4(image.eval(xy));
+  float3 rgb = c.rgb;
 
   if (mode < 0.5) {
     // Black & white document: greyscale + levels + mild gamma.
-    half l = dot(rgb, half3(0.2126, 0.7152, 0.0722));
-    half black = 0.26;
-    half white = 0.74;
-    half v = clamp((l - black) / (white - black), 0.0, 1.0);
+    float l = dot(rgb, LUMA);
+    float v = clamp((l - 0.26) / (0.74 - 0.26), 0.0, 1.0);
     v = pow(v, 0.85);
-    return half4(v, v, v, 1.0);
+    return half4(half3(v), 1.0);
   } else if (mode < 1.5) {
     // Colour document: lift black point, add contrast + saturation.
     rgb = clamp((rgb - 0.05) / 0.92, 0.0, 1.0);
     rgb = clamp((rgb - 0.5) * 1.18 + 0.5, 0.0, 1.0);
-    rgb = sat(rgb, 1.22);
-    return half4(rgb, 1.0);
+    rgb = saturate3(rgb, 1.22);
+    return half4(half3(rgb), 1.0);
   } else {
     // Colour photo: gentle, natural enhance only.
     rgb = clamp((rgb - 0.5) * 1.05 + 0.5, 0.0, 1.0);
-    rgb = sat(rgb, 1.06);
-    return half4(rgb, 1.0);
+    rgb = saturate3(rgb, 1.06);
+    return half4(half3(rgb), 1.0);
   }
 }
 `;
