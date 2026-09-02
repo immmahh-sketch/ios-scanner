@@ -4,6 +4,8 @@ name: Publish OTA update
 # The installed app checks this channel on launch and downloads changes — no
 # rebuild / re-sideload needed, as long as the native runtime is unchanged
 # (i.e. you did not add/upgrade a native module or bump the app version).
+#
+# Until the EXPO_TOKEN repo secret is added, the publish step skips cleanly.
 
 on:
   workflow_dispatch:
@@ -28,30 +30,45 @@ concurrency:
 
 jobs:
   update:
-    # Skips cleanly until the EXPO_TOKEN repo secret is added.
-    if: ${{ secrets.EXPO_TOKEN != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Check for EXPO_TOKEN
+        id: gate
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::EXPO_TOKEN secret not set - skipping OTA publish."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
+        if: steps.gate.outputs.enabled == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node
+        if: steps.gate.outputs.enabled == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Setup EAS
+        if: steps.gate.outputs.enabled == 'true'
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
+        if: steps.gate.outputs.enabled == 'true'
         run: npm ci
 
       - name: Publish update
+        if: steps.gate.outputs.enabled == 'true'
         run: |
           MSG="${{ github.event.inputs.message }}"
           [ -n "$MSG" ] || MSG="$(git log -1 --pretty=%s)"
