@@ -31,3 +31,18 @@ export async function applyOta(): Promise<void> {
 export const currentUpdateId = Updates.updateId ?? 'embedded';
 export const runtimeVersion =
   Constants.expoConfig?.version ?? Updates.runtimeVersion ?? '1.0.0';
+
+/**
+ * When the running JS bundle was published. `Updates.createdAt` is the OTA
+ * update's publish time; null means the app is running its embedded bundle.
+ */
+export function lastUpdateLabel(): string {
+  const d = Updates.createdAt;
+  if (!d) return 'base build';
+  return d.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}

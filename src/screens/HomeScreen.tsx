@@ -10,7 +10,7 @@ import { nextCount } from '../lib/counters';
 import { pad4 } from '../lib/names';
 import { expenseDocName, type ExpenseKind } from '../lib/receipts';
 import { analyzeMeetingNotes, analyzeReceipt, analyzeRightToWork } from '../lib/ai';
-import { applyOta, checkForOta, runtimeVersion } from '../lib/updates';
+import { applyOta, checkForOta, lastUpdateLabel, runtimeVersion } from '../lib/updates';
 import { isScannerAvailable } from '../../modules/document-scanner';
 import { theme } from '../theme';
 import { MODE_LABELS } from '../types';
@@ -165,7 +165,11 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.headerBar}>
         <Text style={styles.title}>Scanner</Text>
-        <Text style={styles.version}>v{runtimeVersion}</Text>
+        <Text style={styles.version}>
+          v{runtimeVersion}
+          {'\n'}
+          <Text style={styles.versionDim}>updated {lastUpdateLabel()}</Text>
+        </Text>
       </View>
 
       {otaReady ? (
@@ -228,14 +232,15 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   headerBar: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 8,
   },
   title: { color: theme.colors.text, fontSize: 30, fontWeight: '800' },
-  version: { color: theme.colors.textDim, fontSize: 13 },
+  version: { color: theme.colors.textDim, fontSize: 12, textAlign: 'right', lineHeight: 16 },
+  versionDim: { color: theme.colors.border, fontSize: 11 },
   otaBanner: {
     marginHorizontal: 16,
     marginBottom: 8,

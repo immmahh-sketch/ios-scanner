@@ -3,7 +3,6 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, BusyOverlay } from '../components/ui';
-import { shareFile } from '../lib/export';
 import { buildPdf } from '../lib/pdf';
 import { getDoc } from '../lib/storage';
 import { buildZip, type ZipEntry } from '../lib/zip';
@@ -43,10 +42,17 @@ export function DownloadsScreen({ navigation }: ScreenProps<'Downloads'>) {
     }
   }, []);
 
-  const shareCsv = (kind: ExpenseKind) =>
+  const period = month ? monthLabel(month) : 'all time';
+
+  const emailCsv = (kind: ExpenseKind) =>
     run('Building CSV…', async () => {
       const uri = await buildExpenseCsv(kind, month ?? undefined);
-      await shareFile(uri, kind === 'petty' ? 'Petty cash CSV' : 'Credit card CSV');
+      const label = kind === 'petty' ? 'Petty cash' : 'Credit card';
+      navigation.navigate('SendEmail', {
+        subject: `${label} — ${period}`,
+        body: `${label} spreadsheet for ${period}.`,
+        attachments: [{ filename: uri.split('/').pop() ?? `${label}.csv`, uri }],
+      });
     });
 
   const downloadAll = () =>
@@ -86,10 +92,15 @@ export function DownloadsScreen({ navigation }: ScreenProps<'Downloads'>) {
       const zipName = `receipts-${month ?? 'all'}.zip`;
       const zipUri = await buildZip(zipName, entries);
 
-      const period = month ? monthLabel(month) : 'all time';
+      const label =
+        petty.length && credit.length
+          ? 'Receipts'
+          : petty.length
+            ? 'Petty cash'
+            : 'Credit card';
       navigation.navigate('SendEmail', {
-        subject: `Receipts — ${period}`,
-        body: `Attached: ${records.length} receipt${records.length === 1 ? '' : 's'} for ${period}, with petty-cash / credit-card CSVs.`,
+        subject: `${label} — ${period}`,
+        body: `Attached: ${records.length} receipt${records.length === 1 ? '' : 's'} for ${period}, with the CSV${petty.length && credit.length ? 's' : ''}.`,
         attachments: [{ filename: zipName, uri: zipUri }],
       });
     });
@@ -105,17 +116,18 @@ export function DownloadsScreen({ navigation }: ScreenProps<'Downloads'>) {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Spreadsheets</Text>
-        <Button title="Petty cash CSV" icon="📄" kind="secondary" onPress={() => shareCsv('petty')} />
-        <Button title="Credit card CSV" icon="📄" kind="secondary" onPress={() => shareCsv('credit')} />
+        <Text style={styles.sectionTitle}>Spreadsheets — {period}</Text>
+        <Button title="Petty cash CSV" icon="📄" kind="secondary" onPress={() => emailCsv('petty')} />
+        <Button title="Credit card CSV" icon="📄" kind="secondary" onPress={() => emailCsv('credit')} />
         <Text style={styles.hint}>
-          Columns: Date, Supplier, Purchases, Total cost, VAT paid, Nett cost.
+          Columns: Date, Supplier, Purchases, Total cost, VAT paid, Nett cost. Opens the Send
+          screen — email it, or choose “Share sheet” in Settings to just save it.
         </Text>
 
-        <Text style={styles.sectionTitle}>Everything</Text>
-        <Button title="Download all receipts" icon="🗂️" onPress={downloadAll} />
+        <Text style={styles.sectionTitle}>Everything — {period}</Text>
+        <Button title="All receipts (zip)" icon="🗂️" onPress={downloadAll} />
         <Text style={styles.hint}>
-          A .zip of the selected period&apos;s receipt PDFs plus the CSVs, attached to a new email.
+          A .zip of the period&apos;s receipt PDFs plus the CSVs, ready to send.
         </Text>
       </ScrollView>
 

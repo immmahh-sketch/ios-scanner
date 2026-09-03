@@ -60,6 +60,16 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         run: npm ci
 
+      - name: Ensure "production" channel exists and points at the branch
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          # The installed app requests updates by channel (expo-channel-name header).
+          # `eas update` only creates the branch, so link a channel to it here.
+          npx --yes eas-cli@latest channel:create production --non-interactive 2>/dev/null || true
+          npx --yes eas-cli@latest channel:edit production --branch production --non-interactive 2>/dev/null || true
+
       - name: Publish update
         if: steps.gate.outputs.enabled == 'true'
         env:
