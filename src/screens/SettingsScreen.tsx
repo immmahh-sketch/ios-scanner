@@ -18,6 +18,7 @@ import {
   type Prefs,
 } from '../lib/settings';
 import { testConnection } from '../lib/ai';
+import { sendTestEmail } from '../lib/email';
 import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
 
@@ -71,6 +72,16 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
     try {
       const r = await testConnection();
       Alert.alert(r.ok ? 'Success' : 'Failed', r.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const testEmailSend = async () => {
+    setBusy('Sending test…');
+    try {
+      const r = await sendTestEmail();
+      Alert.alert(r.ok ? 'Test accepted' : 'Test failed', r.message);
     } finally {
       setBusy(null);
     }
@@ -166,7 +177,19 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
               secureTextEntry={!emailInput.includes('•')}
               onFocus={() => emailInput.includes('•') && setEmailInput('')}
             />
-            <Button title={emailSaved ? 'Update key' : 'Save key'} onPress={saveEmail} />
+            <View style={styles.row}>
+              <View style={styles.flex}>
+                <Button title={emailSaved ? 'Update key' : 'Save key'} onPress={saveEmail} />
+              </View>
+              <View style={styles.flex}>
+                <Button
+                  title="Send test"
+                  kind="secondary"
+                  disabled={!emailSaved}
+                  onPress={testEmailSend}
+                />
+              </View>
+            </View>
             <Text style={styles.status}>{emailSaved ? '● Key saved' : '○ No key'}</Text>
           </>
         ) : null}

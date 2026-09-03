@@ -53,7 +53,7 @@ function providerFor(key: string): 'brevo' | 'resend' {
 }
 
 /** Sends immediately through the configured email service (attachments included). */
-export async function sendDirect(email: OutgoingEmail): Promise<void> {
+export async function sendDirect(email: OutgoingEmail): Promise<{ id: string; provider: string }> {
   const key = await getEmailKey();
   if (!key) throw new Error('No email API key saved (Settings → Email).');
   if (!email.to.trim()) throw new Error('Pick a recipient first.');
@@ -105,9 +105,51 @@ export async function sendDirect(email: OutgoingEmail): Promise<void> {
     });
   }
 
+  const provider = providerFor(key);
+  const bodyText = await res.text().catch(() => '');
+
   if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(apiErrorMessage(detail, res.status));
+    throw new Error(`${provider} ${res.status}: ${apiErrorMessage(bodyText, res.status)}`);
+  }
+
+  let id = '';
+  try {
+    const j = JSON.parse(bodyText) as { messageId?: string; id?: string };
+    id = j.messageId ?? j.id ?? '';
+  } catch {
+    // ignore
+  }
+  if (!id) {
+    // 2xx but no id back — the send did NOT register. Surface the body.
+    throw new Error(
+      `${provider} accepted the request (HTTP ${res.status}) but returned no message id. Response: ${
+        bodyText.slice(0, 300) || '(empty)'
+      }`,
+    );
+  }
+  return { id, provider };
+}
+
+/** Real end-to-end send to the configured From address; returns what the service said. */
+export async function sendTestEmail(): Promise<{ ok: boolean; message: string }> {
+  const key = await getEmailKey();
+  if (!key) return { ok: false, message: 'No email API key saved.' };
+  const prefs = await getPrefs();
+  const to = prefs.fromEmail.trim();
+  if (!to) return { ok: false, message: 'Set a From address first.' };
+  try {
+    const r = await sendDirect({
+      to,
+      subject: 'Scanner test email',
+      body: 'Test email from the Scanner app. If you see this, sending works.',
+      attachments: [],
+    });
+    return {
+      ok: true,
+      message: `${r.provider} accepted it (id ${r.id}). Sent to ${to} — check that inbox and spam.`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
   }
 }
 

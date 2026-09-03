@@ -62,9 +62,10 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
     }
     setBusy(true);
     try {
-      await sendEmail(method, { to: to.trim(), subject, body, attachments });
+      const result = await sendEmail(method, { to: to.trim(), subject, body, attachments });
       if (method === 'app') {
-        Alert.alert('Sent', `Emailed to ${to.trim()}.`);
+        const id = result && 'id' in result ? result.id : '';
+        Alert.alert('Sent', `Emailed to ${to.trim()}${id ? `\n(id ${id})` : ''}.`);
       }
       navigation.goBack();
     } catch (err) {
