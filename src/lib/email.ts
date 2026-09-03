@@ -133,13 +133,14 @@ export async function sendDirect(email: OutgoingEmail): Promise<{ id: string; pr
   return { id, provider };
 }
 
-/** Real end-to-end send to the configured From address; returns what the service said. */
+/** Real end-to-end send to a real mailbox (Reply-To, else first recipient). */
 export async function sendTestEmail(): Promise<{ ok: boolean; message: string }> {
   const key = await getEmailKey();
   if (!key) return { ok: false, message: 'No email API key saved.' };
   const prefs = await getPrefs();
-  const to = prefs.fromEmail.trim();
-  if (!to) return { ok: false, message: 'Set a From address first.' };
+  // NOT the From address — a sending subdomain has no mailbox and would bounce.
+  const to = (prefs.replyTo || prefs.recipients[0] || '').trim();
+  if (!to) return { ok: false, message: 'Set a Reply-To address or a recipient first.' };
   try {
     const r = await sendDirect({
       to,
