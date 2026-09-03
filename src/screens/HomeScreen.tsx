@@ -65,7 +65,7 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
           const ai = await analyzeRightToWork(first);
           const name = ai?.personName ? `RTW ${ai.personName}` : `RTW ${pad4(await nextCount('RTW'))}`;
           setBusy('Processing pages…');
-          const doc = await createDocFromScans(rawUris, 'color-doc', name);
+          const doc = await createDocFromScans(rawUris, 'color-doc', name, 'rtw');
           putDoc(doc);
           navigation.navigate('Review', { docId: doc.id });
         } else if (cfg.kind === 'meeting') {
@@ -77,13 +77,13 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
               : ai.meetingType
             : `Meeting notes ${pad4(await nextCount('Meeting notes'))}`;
           setBusy('Processing pages…');
-          const doc = await createDocFromScans(rawUris, 'bw', name);
+          const doc = await createDocFromScans(rawUris, 'bw', name, 'meeting');
           putDoc(doc);
           navigation.navigate('Review', { docId: doc.id });
         } else if (cfg.kind === 'other') {
           setBusy('Processing pages…');
           const name = `Scan ${pad4(await nextCount('Scan'))}`;
-          const doc = await createDocFromScans(rawUris, 'bw', name);
+          const doc = await createDocFromScans(rawUris, 'bw', name, 'document');
           putDoc(doc);
           navigation.navigate('Review', { docId: doc.id });
         } else {
@@ -91,7 +91,7 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
           const ai = await analyzeReceipt(first);
           const name = expenseDocName(cfg.receiptKind, ai?.supplier ?? '', ai?.date ?? '');
           setBusy('Processing pages…');
-          const doc = await createDocFromScans(rawUris, 'bw', name);
+          const doc = await createDocFromScans(rawUris, 'bw', name, 'receipt');
           putDoc(doc);
           navigation.navigate('ReceiptDetails', { docId: doc.id, kind: cfg.receiptKind, ai });
         }

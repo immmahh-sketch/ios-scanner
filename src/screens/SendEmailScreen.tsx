@@ -33,6 +33,7 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
   const [custom, setCustom] = useState(false);
   const [subject, setSubject] = useState(subject0);
   const [body, setBody] = useState(body0);
+  const [override, setOverride] = useState<EmailMethod | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -45,10 +46,11 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
 
   const method: EmailMethod = useMemo(() => {
     if (!prefs) return 'share';
+    const chosen = override ?? prefs.emailMethod;
     // "Send through the app" chosen but no key saved → fall back to the share sheet.
-    if (prefs.emailMethod === 'app' && !keyReady) return 'share';
-    return prefs.emailMethod;
-  }, [prefs, keyReady]);
+    if (chosen === 'app' && !keyReady) return 'share';
+    return chosen;
+  }, [prefs, keyReady, override]);
 
   const canAttach = method === 'app';
   const hasAttach = attachments.length > 0;
@@ -137,17 +139,29 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
               ))}
               {method === 'outlook' ? (
                 <Text style={styles.warn}>
-                  Outlook can&apos;t take an attachment from a link — it&apos;ll open the share sheet
-                  with the file instead. Choose “Send through the app” in Settings to send it
-                  directly.
+                  Outlook can&apos;t take an attachment from a link — it opens the share sheet with
+                  the file instead.
                 </Text>
               ) : method === 'share' ? (
                 <Text style={styles.warn}>
-                  Opens the iOS share sheet with the file attached — pick your mail app there.
+                  Opens the iOS share sheet with the file attached — good for large files (Google
+                  Drive, Files, AirDrop) or picking another mail app.
                 </Text>
               ) : null}
             </>
           ) : null}
+
+          <Text style={styles.label}>Send with</Text>
+          <View style={styles.chips}>
+            {(['app', 'outlook', 'share'] as EmailMethod[]).map((m) => (
+              <Chip
+                key={m}
+                label={METHOD_LABEL[m]}
+                active={(override ?? prefs?.emailMethod) === m}
+                onPress={() => setOverride(m)}
+              />
+            ))}
+          </View>
         </ScrollView>
 
         <View style={styles.footer}>

@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
-import type { Page, ScanDoc } from '../types';
+import type { DocCategory, Page, ScanDoc } from '../types';
 
 const ROOT = `${FileSystem.documentDirectory}scans/`;
 const INDEX = `${ROOT}index.json`;
@@ -50,6 +50,22 @@ export async function deleteDoc(id: string): Promise<void> {
 export async function getDoc(id: string): Promise<ScanDoc | undefined> {
   const docs = await listDocs();
   return docs.find((d) => d.id === id);
+}
+
+/**
+ * Docs of a given category. Older docs have no `category`, so an optional name
+ * prefix (e.g. "RTW ") is used as a fallback match.
+ */
+export async function listByCategory(
+  category: DocCategory,
+  namePrefix?: string,
+): Promise<ScanDoc[]> {
+  const docs = await listDocs();
+  return docs.filter(
+    (d) =>
+      d.category === category ||
+      (!d.category && namePrefix ? d.name.toLowerCase().startsWith(namePrefix.toLowerCase()) : false),
+  );
 }
 
 /**

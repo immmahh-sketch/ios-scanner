@@ -1,4 +1,4 @@
-import type { Page, ScanDoc, ScanMode } from '../types';
+import type { DocCategory, Page, ScanDoc, ScanMode } from '../types';
 import { uid } from './ids';
 import { defaultScanName } from './names';
 import { processScan, rotateImage } from './imageProcessing';
@@ -32,6 +32,7 @@ export async function createDocFromScans(
   rawUris: string[],
   mode: ScanMode,
   name?: string,
+  category?: DocCategory,
 ): Promise<ScanDoc> {
   const docId = uid('doc-');
   const pages: Page[] = [];
@@ -44,6 +45,7 @@ export async function createDocFromScans(
     id: docId,
     name: name ?? defaultScanName(new Date(now)),
     mode,
+    category,
     createdAt: now,
     updatedAt: now,
     pages,

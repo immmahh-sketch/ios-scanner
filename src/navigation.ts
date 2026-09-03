@@ -10,6 +10,7 @@ export type RootStackParamList = {
   Export: { docId: string };
   Settings: undefined;
   Downloads: undefined;
+  RtwDownload: undefined;
   ReceiptDetails: {
     docId: string;
     kind: ExpenseKind;

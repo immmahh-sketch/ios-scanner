@@ -13,6 +13,7 @@ import { ReviewScreen } from './src/screens/ReviewScreen';
 import { ExportScreen } from './src/screens/ExportScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { DownloadsScreen } from './src/screens/DownloadsScreen';
+import { RtwDownloadScreen } from './src/screens/RtwDownloadScreen';
 import { ReceiptDetailsScreen } from './src/screens/ReceiptDetailsScreen';
 import { SendEmailScreen } from './src/screens/SendEmailScreen';
 import { theme } from './src/theme';
@@ -73,6 +74,11 @@ export default function App() {
                   name="Downloads"
                   component={DownloadsScreen}
                   options={{ title: 'Downloads' }}
+                />
+                <Stack.Screen
+                  name="RtwDownload"
+                  component={RtwDownloadScreen}
+                  options={{ title: 'RTW documents' }}
                 />
                 <Stack.Screen
                   name="Settings"

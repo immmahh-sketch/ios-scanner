@@ -26,10 +26,14 @@ export interface Page {
   rotation: 0 | 90 | 180 | 270;
 }
 
+export type DocCategory = 'rtw' | 'meeting' | 'receipt' | 'document';
+
 export interface ScanDoc {
   id: string;
   name: string;
   mode: ScanMode;
+  /** What was being scanned; set from the home-screen choice. Older docs lack it. */
+  category?: DocCategory;
   createdAt: number;
   updatedAt: number;
   pages: Page[];

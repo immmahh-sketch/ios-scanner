@@ -129,6 +129,18 @@ export function DownloadsScreen({ navigation }: ScreenProps<'Downloads'>) {
         <Text style={styles.hint}>
           A .zip of the period&apos;s receipt PDFs plus the CSVs, ready to send.
         </Text>
+
+        <Text style={styles.sectionTitle}>Right to Work</Text>
+        <Button
+          title="Choose RTW documents"
+          icon="🪪"
+          kind="secondary"
+          onPress={() => navigation.navigate('RtwDownload')}
+        />
+        <Text style={styles.hint}>
+          Pick RTW scans by employee name, then email / zip / share (period filter doesn&apos;t
+          apply here).
+        </Text>
       </ScrollView>
 
       <View style={styles.footer}>
