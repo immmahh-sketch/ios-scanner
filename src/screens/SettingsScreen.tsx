@@ -5,11 +5,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, BusyOverlay } from '../components/ui';
 import {
   getApiKey,
+  getBrevoKey,
   getPrefs,
   hasApiKey,
+  hasBrevoKey,
   hasResendKey,
   MODELS,
   setApiKey,
+  setBrevoKey,
   setResendKey,
   updatePrefs,
   type EmailMethod,
@@ -21,6 +24,7 @@ import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
 
 const EMAIL_METHODS: { id: EmailMethod; label: string; note: string }[] = [
+  { id: 'brevo', label: 'Brevo', note: 'Sends directly, with attachments. Needs a Brevo API key + verified sender.' },
   { id: 'resend', label: 'Resend', note: 'Sends directly, with attachments. Needs a Resend API key.' },
   { id: 'outlook', label: 'Outlook', note: 'Opens the Outlook app pre-filled. No attachments.' },
   { id: 'share', label: 'Share sheet', note: 'iOS share sheet — attach the file, pick any app.' },
@@ -32,6 +36,8 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
   const [anthropicSaved, setAnthropicSaved] = useState(false);
   const [resendInput, setResendInput] = useState('');
   const [resendSaved, setResendSaved] = useState(false);
+  const [brevoInput, setBrevoInput] = useState('');
+  const [brevoSaved, setBrevoSaved] = useState(false);
   const [newRecipient, setNewRecipient] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -39,7 +45,9 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
     getPrefs().then(setPrefs);
     hasApiKey().then(setAnthropicSaved);
     hasResendKey().then(setResendSaved);
+    hasBrevoKey().then(setBrevoSaved);
     getApiKey().then((k) => k && setAnthropicInput(mask(k)));
+    getBrevoKey().then((k) => k && setBrevoInput(mask(k)));
   }, []);
 
   const patch = async (p: Partial<Prefs>) => setPrefs(await updatePrefs(p));
@@ -58,6 +66,14 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
     setResendSaved(resendInput.trim().length > 0);
     if (resendInput.trim()) setResendInput(mask(resendInput.trim()));
     Alert.alert('Saved', 'Resend key stored in the Keychain.');
+  };
+
+  const saveBrevo = async () => {
+    if (brevoInput.includes('•')) return;
+    await setBrevoKey(brevoInput);
+    setBrevoSaved(brevoInput.trim().length > 0);
+    if (brevoInput.trim()) setBrevoInput(mask(brevoInput.trim()));
+    Alert.alert('Saved', 'Brevo key stored in the Keychain.');
   };
 
   const testAi = async () => {
@@ -144,7 +160,27 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
           />
         ))}
 
-        {prefs.emailMethod === 'resend' ? (
+        {prefs.emailMethod === 'brevo' ? (
+          <>
+            <Text style={styles.h}>Brevo API key</Text>
+            <Text style={styles.hint}>
+              From app.brevo.com → SMTP &amp; API → API Keys (starts “xkeysib-”). The “From” address
+              below must be an authenticated sender / domain in Brevo.
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={brevoInput}
+              onChangeText={setBrevoInput}
+              placeholder="xkeysib-…"
+              placeholderTextColor={theme.colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={!brevoInput.includes('•')}
+              onFocus={() => brevoInput.includes('•') && setBrevoInput('')}
+            />
+            <Button title={brevoSaved ? 'Update key' : 'Save key'} onPress={saveBrevo} />
+          </>
+        ) : prefs.emailMethod === 'resend' ? (
           <>
             <Text style={styles.h}>Resend API key</Text>
             <Text style={styles.hint}>

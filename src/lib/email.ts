@@ -1,10 +1,11 @@
 import * as Linking from 'expo-linking';
 import * as FileSystem from 'expo-file-system/legacy';
 
-import { getPrefs, getResendKey } from './settings';
+import { getBrevoKey, getPrefs, getResendKey, type EmailMethod } from './settings';
 import { shareFile } from './export';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 
 export interface EmailAttachment {
   filename: string;
@@ -72,6 +73,58 @@ export async function sendViaResend(email: OutgoingEmail): Promise<void> {
   }
 }
 
+async function base64Attachments(atts: EmailAttachment[]): Promise<{ name: string; content: string }[]> {
+  const out: { name: string; content: string }[] = [];
+  for (const att of atts) {
+    const content = await FileSystem.readAsStringAsync(att.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    out.push({ name: att.filename, content });
+  }
+  return out;
+}
+
+function extractApiError(detail: string, fallback: string): string {
+  try {
+    const j = JSON.parse(detail) as { message?: string };
+    if (j.message) return j.message;
+  } catch {
+    if (detail) return detail.slice(0, 200);
+  }
+  return fallback;
+}
+
+/** Sends immediately through the user's Brevo account (attachments included). */
+export async function sendViaBrevo(email: OutgoingEmail): Promise<void> {
+  const key = await getBrevoKey();
+  if (!key) throw new Error('No Brevo API key saved (Settings → Email).');
+  const prefs = await getPrefs();
+  if (!email.to.trim()) throw new Error('Pick a recipient first.');
+
+  const attachment = await base64Attachments(email.attachments);
+
+  const res = await fetch(BREVO_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+      'api-key': key,
+    },
+    body: JSON.stringify({
+      sender: { email: prefs.fromEmail.trim(), name: prefs.fromName.trim() || undefined },
+      to: [{ email: email.to.trim() }],
+      subject: email.subject,
+      textContent: email.body,
+      attachment: attachment.length ? attachment : undefined,
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(extractApiError(detail, `Brevo ${res.status}`));
+  }
+}
+
 function queryString(params: Record<string, string>): string {
   return Object.entries(params)
     .filter(([, v]) => v)
@@ -106,8 +159,9 @@ export async function shareAttachmentsForEmail(email: OutgoingEmail): Promise<vo
   await shareFile(email.attachments[0].uri, email.subject || 'Share');
 }
 
-export async function sendEmail(method: 'resend' | 'outlook' | 'share', email: OutgoingEmail) {
+export async function sendEmail(method: EmailMethod, email: OutgoingEmail) {
   if (method === 'resend') return sendViaResend(email);
+  if (method === 'brevo') return sendViaBrevo(email);
   if (method === 'outlook') return openOutlookCompose(email);
   return shareAttachmentsForEmail(email);
 }

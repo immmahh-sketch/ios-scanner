@@ -14,12 +14,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, BusyOverlay } from '../components/ui';
 import { sendEmail } from '../lib/email';
-import { getPrefs, hasResendKey, type EmailMethod, type Prefs } from '../lib/settings';
+import {
+  DIRECT_EMAIL_METHODS,
+  directMethodReady,
+  getPrefs,
+  type EmailMethod,
+  type Prefs,
+} from '../lib/settings';
 import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
 
 const METHOD_LABEL: Record<EmailMethod, string> = {
   resend: 'Send via Resend',
+  brevo: 'Send via Brevo',
   outlook: 'Open in Outlook',
   share: 'Share sheet',
 };
@@ -28,7 +35,7 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
   const { subject: subject0, body: body0, attachments, suggestedRecipient } = route.params;
 
   const [prefs, setPrefs] = useState<Prefs | null>(null);
-  const [resendReady, setResendReady] = useState(false);
+  const [keyReady, setKeyReady] = useState(true);
   const [to, setTo] = useState(suggestedRecipient ?? '');
   const [custom, setCustom] = useState(false);
   const [subject, setSubject] = useState(subject0);
@@ -39,17 +46,18 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
     getPrefs().then((p) => {
       setPrefs(p);
       if (!suggestedRecipient && p.recipients[0]) setTo(p.recipients[0]);
+      directMethodReady(p.emailMethod).then(setKeyReady);
     });
-    hasResendKey().then(setResendReady);
   }, [suggestedRecipient]);
 
   const method: EmailMethod = useMemo(() => {
     if (!prefs) return 'share';
-    if (prefs.emailMethod === 'resend' && !resendReady) return 'share';
+    // Selected a direct provider but its key isn't saved → fall back to share sheet.
+    if (DIRECT_EMAIL_METHODS.includes(prefs.emailMethod) && !keyReady) return 'share';
     return prefs.emailMethod;
-  }, [prefs, resendReady]);
+  }, [prefs, keyReady]);
 
-  const canAttach = method === 'resend';
+  const canAttach = DIRECT_EMAIL_METHODS.includes(method);
   const hasAttach = attachments.length > 0;
 
   const send = async () => {
@@ -60,12 +68,10 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
     setBusy(true);
     try {
       await sendEmail(method, { to: to.trim(), subject, body, attachments });
-      if (method === 'resend') {
+      if (DIRECT_EMAIL_METHODS.includes(method)) {
         Alert.alert('Sent', `Emailed to ${to.trim()}.`);
-        navigation.goBack();
-      } else {
-        navigation.goBack();
       }
+      navigation.goBack();
     } catch (err) {
       Alert.alert('Could not send', err instanceof Error ? err.message : String(err));
     } finally {
@@ -136,10 +142,14 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
                   📎 {a.filename}
                 </Text>
               ))}
-              {!canAttach ? (
+              {method === 'outlook' ? (
                 <Text style={styles.warn}>
-                  {METHOD_LABEL[method]} can&apos;t carry an attachment. It will open with the file
-                  via the share sheet, or switch to Resend in Settings.
+                  Outlook can&apos;t take an attachment from a link — it&apos;ll open the share sheet
+                  with the file instead. Use Brevo or Resend in Settings to send it directly.
+                </Text>
+              ) : method === 'share' ? (
+                <Text style={styles.warn}>
+                  Opens the iOS share sheet with the file attached — pick your mail app there.
                 </Text>
               ) : null}
             </>
@@ -148,7 +158,7 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
 
         <View style={styles.footer}>
           <Text style={styles.method}>{METHOD_LABEL[method]}</Text>
-          <Button title={method === 'resend' ? 'Send' : 'Continue'} onPress={send} />
+          <Button title={canAttach || !hasAttach ? 'Send' : 'Continue'} onPress={send} />
         </View>
       </KeyboardAvoidingView>
       <BusyOverlay visible={busy} label="Sending…" />

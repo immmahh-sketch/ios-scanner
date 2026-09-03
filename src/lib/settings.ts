@@ -5,6 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 // sent to their own service. Non-secret prefs go in a plain JSON file.
 const ANTHROPIC_KEY_ITEM = 'anthropic_api_key';
 const RESEND_KEY_ITEM = 'resend_api_key';
+const BREVO_KEY_ITEM = 'brevo_api_key';
 const PREFS_FILE = `${FileSystem.documentDirectory}settings.json`;
 
 export const MODELS = [
@@ -16,7 +17,10 @@ export const MODELS = [
 export type ModelId = (typeof MODELS)[number]['id'];
 export const DEFAULT_MODEL: ModelId = 'claude-opus-5';
 
-export type EmailMethod = 'resend' | 'outlook' | 'share';
+export type EmailMethod = 'resend' | 'brevo' | 'outlook' | 'share';
+
+/** Send methods that deliver directly with the attachment to the typed recipient. */
+export const DIRECT_EMAIL_METHODS: EmailMethod[] = ['resend', 'brevo'];
 
 export interface Prefs {
   model: ModelId;
@@ -28,7 +32,7 @@ export interface Prefs {
 
 const DEFAULT_PREFS: Prefs = {
   model: DEFAULT_MODEL,
-  emailMethod: 'resend',
+  emailMethod: 'brevo',
   fromName: '',
   fromEmail: 'gm@blackhorsebeamish.co.uk',
   recipients: [
@@ -101,6 +105,30 @@ export async function setResendKey(key: string): Promise<void> {
 }
 export async function hasResendKey(): Promise<boolean> {
   return (await getResendKey())?.length ? true : false;
+}
+
+// --- Brevo key ---
+export async function getBrevoKey(): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(BREVO_KEY_ITEM);
+  } catch {
+    return null;
+  }
+}
+export async function setBrevoKey(key: string): Promise<void> {
+  const t = key.trim();
+  if (t) await SecureStore.setItemAsync(BREVO_KEY_ITEM, t);
+  else await SecureStore.deleteItemAsync(BREVO_KEY_ITEM);
+}
+export async function hasBrevoKey(): Promise<boolean> {
+  return (await getBrevoKey())?.length ? true : false;
+}
+
+/** Whether the currently-selected direct method has its key saved. */
+export async function directMethodReady(method: EmailMethod): Promise<boolean> {
+  if (method === 'resend') return hasResendKey();
+  if (method === 'brevo') return hasBrevoKey();
+  return true;
 }
 
 // --- model (kept as thin wrappers for existing callers) ---
