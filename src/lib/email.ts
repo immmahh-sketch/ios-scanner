@@ -61,6 +61,7 @@ export async function sendDirect(email: OutgoingEmail): Promise<{ id: string; pr
   const to = email.to.trim();
   const fromEmail = prefs.fromEmail.trim();
   const fromName = prefs.fromName.trim();
+  const replyTo = prefs.replyTo.trim();
 
   let res: Response;
   if (providerFor(key) === 'resend') {
@@ -78,6 +79,7 @@ export async function sendDirect(email: OutgoingEmail): Promise<{ id: string; pr
       body: JSON.stringify({
         from: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
         to: [to],
+        reply_to: replyTo || undefined,
         subject: email.subject,
         text: email.body,
         attachments: attachments.length ? attachments : undefined,
@@ -98,6 +100,7 @@ export async function sendDirect(email: OutgoingEmail): Promise<{ id: string; pr
       body: JSON.stringify({
         sender: { email: fromEmail, name: fromName || undefined },
         to: [{ email: to }],
+        replyTo: replyTo ? { email: replyTo } : undefined,
         subject: email.subject,
         textContent: email.body,
         attachment: attachment.length ? attachment : undefined,

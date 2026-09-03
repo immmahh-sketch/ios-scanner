@@ -196,7 +196,10 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
 
         <Text style={styles.h}>From</Text>
         <Text style={styles.hint}>
-          For Outlook this only applies if the address is an account already added in Outlook.
+          For “Send through the app” this must be a verified sender / authenticated domain on your
+          email service. To avoid Microsoft 365 quarantining mail “from” your own domain, send from
+          a subdomain (e.g. scanner@mail.blackhorsebeamish.co.uk) and set Reply-To below. For
+          Outlook this only applies if the address is an account already in Outlook.
         </Text>
         <TextInput
           style={styles.input}
@@ -209,6 +212,19 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
           style={styles.input}
           value={prefs.fromEmail}
           onChangeText={(v) => patch({ fromEmail: v.trim() })}
+          placeholder="scanner@mail.blackhorsebeamish.co.uk"
+          placeholderTextColor={theme.colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+        />
+
+        <Text style={styles.h}>Reply-To</Text>
+        <Text style={styles.hint}>Where replies go (used by “Send through the app”).</Text>
+        <TextInput
+          style={styles.input}
+          value={prefs.replyTo}
+          onChangeText={(v) => patch({ replyTo: v.trim() })}
           placeholder="gm@blackhorsebeamish.co.uk"
           placeholderTextColor={theme.colors.textDim}
           autoCapitalize="none"

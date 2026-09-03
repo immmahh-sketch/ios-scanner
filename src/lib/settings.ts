@@ -25,6 +25,8 @@ export interface Prefs {
   emailMethod: EmailMethod;
   fromName: string;
   fromEmail: string;
+  /** Reply-To for "Send through the app". Useful when From is a sending subdomain. */
+  replyTo: string;
   recipients: string[];
 }
 
@@ -33,6 +35,7 @@ const DEFAULT_PREFS: Prefs = {
   emailMethod: 'app',
   fromName: '',
   fromEmail: 'gm@blackhorsebeamish.co.uk',
+  replyTo: 'gm@blackhorsebeamish.co.uk',
   recipients: [
     'gm@blackhorsebeamish.co.uk',
     'Accounts@blackhorsebeamish.co.uk',
