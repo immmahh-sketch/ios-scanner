@@ -14,6 +14,7 @@ import { ExportScreen } from './src/screens/ExportScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { DownloadsScreen } from './src/screens/DownloadsScreen';
 import { ReceiptDetailsScreen } from './src/screens/ReceiptDetailsScreen';
+import { SendEmailScreen } from './src/screens/SendEmailScreen';
 import { theme } from './src/theme';
 import type { RootStackParamList } from './src/navigation';
 
@@ -62,6 +63,11 @@ export default function App() {
                   name="ReceiptDetails"
                   component={ReceiptDetailsScreen}
                   options={{ title: 'Receipt' }}
+                />
+                <Stack.Screen
+                  name="SendEmail"
+                  component={SendEmailScreen}
+                  options={{ title: 'Send email' }}
                 />
                 <Stack.Screen
                   name="Downloads"

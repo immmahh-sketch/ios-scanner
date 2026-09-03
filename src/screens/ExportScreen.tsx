@@ -15,7 +15,7 @@ import { Button, BusyOverlay } from '../components/ui';
 import { useDocs } from '../state/DocsContext';
 import { renameDoc } from '../lib/scanFlow';
 import { buildPdf } from '../lib/pdf';
-import { emailPdf, isWhatsAppInstalled, sharePdf, shareToWhatsApp } from '../lib/export';
+import { isWhatsAppInstalled, sharePdf, shareToWhatsApp } from '../lib/export';
 import { sanitizeFilename } from '../lib/names';
 import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
@@ -117,7 +117,14 @@ export function ExportScreen({ route, navigation }: ScreenProps<'Export'>) {
               title="Email"
               icon="✉"
               onPress={() =>
-                withPdf('Preparing PDF…', (uri) => emailPdf(uri, sanitizeFilename(name)))
+                withPdf('Preparing PDF…', async (uri) => {
+                  const clean = sanitizeFilename(name);
+                  navigation.navigate('SendEmail', {
+                    subject: clean,
+                    body: `Scanned document: ${clean}`,
+                    attachments: [{ filename: `${clean}.pdf`, uri }],
+                  });
+                })
               }
             />
             <Button

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as MailComposer from 'expo-mail-composer';
 
 import { Button, BusyOverlay } from '../components/ui';
 import { shareFile } from '../lib/export';
@@ -88,15 +87,11 @@ export function DownloadsScreen({ navigation }: ScreenProps<'Downloads'>) {
       const zipUri = await buildZip(zipName, entries);
 
       const period = month ? monthLabel(month) : 'all time';
-      if (await MailComposer.isAvailableAsync()) {
-        await MailComposer.composeAsync({
-          subject: `Receipts — ${period}`,
-          body: `Attached: ${records.length} receipt${records.length === 1 ? '' : 's'} for ${period}, with petty-cash / credit-card CSVs.`,
-          attachments: [zipUri],
-        });
-      } else {
-        await shareFile(zipUri, `Receipts — ${period}`);
-      }
+      navigation.navigate('SendEmail', {
+        subject: `Receipts — ${period}`,
+        body: `Attached: ${records.length} receipt${records.length === 1 ? '' : 's'} for ${period}, with petty-cash / credit-card CSVs.`,
+        attachments: [{ filename: zipName, uri: zipUri }],
+      });
     });
 
   return (

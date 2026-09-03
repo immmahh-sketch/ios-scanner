@@ -1,4 +1,3 @@
-import * as MailComposer from 'expo-mail-composer';
 import * as Sharing from 'expo-sharing';
 import * as Linking from 'expo-linking';
 
@@ -21,17 +20,6 @@ export async function shareFile(uri: string, dialogTitle: string): Promise<void>
   await Sharing.shareAsync(uri, { UTI: t.uti, mimeType: t.mime, dialogTitle });
 }
 
-export async function emailPdf(pdfUri: string, name: string): Promise<void> {
-  const available = await MailComposer.isAvailableAsync();
-  if (!available) {
-    throw new Error('No email account is set up on this device. Add one in Settings → Mail.');
-  }
-  await MailComposer.composeAsync({
-    subject: name,
-    body: `Scanned document: ${name}`,
-    attachments: [pdfUri],
-  });
-}
 
 /**
  * Opens the iOS share sheet. "Save to Files" is always one of the targets, so

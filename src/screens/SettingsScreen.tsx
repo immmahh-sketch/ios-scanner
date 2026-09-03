@@ -3,42 +3,64 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, BusyOverlay } from '../components/ui';
-import { getApiKey, getModel, hasApiKey, MODELS, setApiKey, setModel, type ModelId } from '../lib/settings';
+import {
+  getApiKey,
+  getPrefs,
+  hasApiKey,
+  hasResendKey,
+  MODELS,
+  setApiKey,
+  setResendKey,
+  updatePrefs,
+  type EmailMethod,
+  type ModelId,
+  type Prefs,
+} from '../lib/settings';
 import { testConnection } from '../lib/ai';
 import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
 
+const EMAIL_METHODS: { id: EmailMethod; label: string; note: string }[] = [
+  { id: 'resend', label: 'Resend', note: 'Sends directly, with attachments. Needs a Resend API key.' },
+  { id: 'outlook', label: 'Outlook', note: 'Opens the Outlook app pre-filled. No attachments.' },
+  { id: 'share', label: 'Share sheet', note: 'iOS share sheet — attach the file, pick any app.' },
+];
+
 export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
-  const [keyInput, setKeyInput] = useState('');
-  const [keySaved, setKeySaved] = useState(false);
-  const [model, setModelState] = useState<ModelId>('claude-opus-5');
+  const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [anthropicInput, setAnthropicInput] = useState('');
+  const [anthropicSaved, setAnthropicSaved] = useState(false);
+  const [resendInput, setResendInput] = useState('');
+  const [resendSaved, setResendSaved] = useState(false);
+  const [newRecipient, setNewRecipient] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    hasApiKey().then(setKeySaved);
-    getModel().then(setModelState);
-    getApiKey().then((k) => {
-      if (k) setKeyInput(maskKey(k));
-    });
+    getPrefs().then(setPrefs);
+    hasApiKey().then(setAnthropicSaved);
+    hasResendKey().then(setResendSaved);
+    getApiKey().then((k) => k && setAnthropicInput(mask(k)));
   }, []);
 
-  const saveKey = async () => {
-    if (keyInput.includes('•')) {
-      Alert.alert('No change', 'The key field still shows the saved key. Paste a new key to replace it.');
-      return;
-    }
-    await setApiKey(keyInput);
-    setKeySaved(keyInput.trim().length > 0);
-    if (keyInput.trim()) setKeyInput(maskKey(keyInput.trim()));
-    Alert.alert('Saved', keyInput.trim() ? 'API key stored in the iOS Keychain.' : 'API key cleared.');
+  const patch = async (p: Partial<Prefs>) => setPrefs(await updatePrefs(p));
+
+  const saveAnthropic = async () => {
+    if (anthropicInput.includes('•')) return;
+    await setApiKey(anthropicInput);
+    setAnthropicSaved(anthropicInput.trim().length > 0);
+    if (anthropicInput.trim()) setAnthropicInput(mask(anthropicInput.trim()));
+    Alert.alert('Saved', 'Anthropic key stored in the Keychain.');
   };
 
-  const pickModel = async (id: ModelId) => {
-    setModelState(id);
-    await setModel(id);
+  const saveResend = async () => {
+    if (resendInput.includes('•')) return;
+    await setResendKey(resendInput);
+    setResendSaved(resendInput.trim().length > 0);
+    if (resendInput.trim()) setResendInput(mask(resendInput.trim()));
+    Alert.alert('Saved', 'Resend key stored in the Keychain.');
   };
 
-  const test = async () => {
+  const testAi = async () => {
     setBusy('Testing…');
     try {
       const r = await testConnection();
@@ -48,57 +70,148 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
     }
   };
 
+  const addRecipient = async () => {
+    const e = newRecipient.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) {
+      Alert.alert('Invalid', 'Enter a valid email address.');
+      return;
+    }
+    if (prefs && !prefs.recipients.includes(e)) {
+      await patch({ recipients: [...prefs.recipients, e] });
+    }
+    setNewRecipient('');
+  };
+
+  const removeRecipient = async (e: string) => {
+    if (prefs) await patch({ recipients: prefs.recipients.filter((r) => r !== e) });
+  };
+
+  if (!prefs) {
+    return <SafeAreaView style={styles.safe} />;
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Text style={styles.label}>Anthropic API key</Text>
+        {/* --- AI --- */}
+        <Text style={styles.h}>AI (scan reading)</Text>
         <Text style={styles.hint}>
-          From console.anthropic.com → API keys. Stored only in this phone&apos;s Keychain and sent
-          only to api.anthropic.com. Used to read scans and auto-name files.
+          Anthropic API key from console.anthropic.com → API keys. Stored only in this phone&apos;s
+          Keychain; sent only to api.anthropic.com.
         </Text>
         <TextInput
           style={styles.input}
-          value={keyInput}
-          onChangeText={setKeyInput}
+          value={anthropicInput}
+          onChangeText={setAnthropicInput}
           placeholder="sk-ant-…"
           placeholderTextColor={theme.colors.textDim}
           autoCapitalize="none"
           autoCorrect={false}
-          secureTextEntry={!keyInput.includes('•')}
-          onFocus={() => {
-            if (keyInput.includes('•')) setKeyInput('');
-          }}
+          secureTextEntry={!anthropicInput.includes('•')}
+          onFocus={() => anthropicInput.includes('•') && setAnthropicInput('')}
         />
-        <View style={styles.rowButtons}>
+        <View style={styles.row}>
           <View style={styles.flex}>
-            <Button title={keySaved ? 'Update key' : 'Save key'} onPress={saveKey} />
+            <Button title={anthropicSaved ? 'Update key' : 'Save key'} onPress={saveAnthropic} />
           </View>
           <View style={styles.flex}>
-            <Button title="Test" kind="secondary" onPress={test} disabled={!keySaved} />
+            <Button title="Test" kind="secondary" onPress={testAi} disabled={!anthropicSaved} />
           </View>
         </View>
-        <Text style={styles.status}>{keySaved ? '● Key saved' : '○ No key — auto-naming is off'}</Text>
+
+        <Text style={styles.h}>Model</Text>
+        {MODELS.map((m) => (
+          <SelectRow
+            key={m.id}
+            title={m.label}
+            note={m.note}
+            active={prefs.model === m.id}
+            onPress={() => patch({ model: m.id as ModelId })}
+          />
+        ))}
 
         <View style={styles.divider} />
 
-        <Text style={styles.label}>Model</Text>
-        {MODELS.map((m) => (
-          <Pressable
+        {/* --- Email --- */}
+        <Text style={styles.h}>Email — send method</Text>
+        {EMAIL_METHODS.map((m) => (
+          <SelectRow
             key={m.id}
-            style={({ pressed }) => [
-              styles.modelRow,
-              model === m.id && styles.modelRowActive,
-              pressed && styles.pressed,
-            ]}
-            onPress={() => pickModel(m.id)}
-          >
-            <View style={styles.flex}>
-              <Text style={styles.modelLabel}>{m.label}</Text>
-              <Text style={styles.hint}>{m.note}</Text>
-            </View>
-            <Text style={styles.radio}>{model === m.id ? '●' : '○'}</Text>
-          </Pressable>
+            title={m.label}
+            note={m.note}
+            active={prefs.emailMethod === m.id}
+            onPress={() => patch({ emailMethod: m.id })}
+          />
         ))}
+
+        {prefs.emailMethod === 'resend' ? (
+          <>
+            <Text style={styles.h}>Resend API key</Text>
+            <Text style={styles.hint}>
+              From resend.com → API Keys. The “From” domain below must be verified in Resend.
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={resendInput}
+              onChangeText={setResendInput}
+              placeholder="re_…"
+              placeholderTextColor={theme.colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={!resendInput.includes('•')}
+              onFocus={() => resendInput.includes('•') && setResendInput('')}
+            />
+            <Button title={resendSaved ? 'Update key' : 'Save key'} onPress={saveResend} />
+          </>
+        ) : null}
+
+        <Text style={styles.h}>From</Text>
+        <Text style={styles.hint}>
+          For Outlook this only applies if the address is an account already added in Outlook.
+        </Text>
+        <TextInput
+          style={styles.input}
+          value={prefs.fromName}
+          onChangeText={(v) => patch({ fromName: v })}
+          placeholder="Display name (optional)"
+          placeholderTextColor={theme.colors.textDim}
+        />
+        <TextInput
+          style={styles.input}
+          value={prefs.fromEmail}
+          onChangeText={(v) => patch({ fromEmail: v.trim() })}
+          placeholder="gm@blackhorsebeamish.co.uk"
+          placeholderTextColor={theme.colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+        />
+
+        <Text style={styles.h}>Recipient buttons</Text>
+        {prefs.recipients.map((r) => (
+          <View key={r} style={styles.recipientRow}>
+            <Text style={styles.recipientText} numberOfLines={1}>
+              {r}
+            </Text>
+            <Pressable onPress={() => removeRecipient(r)} hitSlop={10}>
+              <Text style={styles.remove}>✕</Text>
+            </Pressable>
+          </View>
+        ))}
+        <View style={styles.row}>
+          <TextInput
+            style={[styles.input, styles.flex]}
+            value={newRecipient}
+            onChangeText={setNewRecipient}
+            placeholder="add@example.com"
+            placeholderTextColor={theme.colors.textDim}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            onSubmitEditing={addRecipient}
+          />
+          <Button title="Add" kind="secondary" onPress={addRecipient} />
+        </View>
       </ScrollView>
 
       <View style={styles.section}>
@@ -109,17 +222,46 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
   );
 }
 
-function maskKey(k: string): string {
-  if (k.length <= 12) return '••••••••';
-  return `${k.slice(0, 8)}${'•'.repeat(12)}${k.slice(-4)}`;
+function SelectRow({
+  title,
+  note,
+  active,
+  onPress,
+}: {
+  title: string;
+  note: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.selectRow,
+        active && styles.selectRowActive,
+        pressed && { opacity: 0.7 },
+      ]}
+      onPress={onPress}
+    >
+      <View style={styles.flex}>
+        <Text style={styles.selectLabel}>{title}</Text>
+        <Text style={styles.hint}>{note}</Text>
+      </View>
+      <Text style={styles.radio}>{active ? '●' : '○'}</Text>
+    </Pressable>
+  );
+}
+
+function mask(k: string): string {
+  return k.length <= 12 ? '••••••••' : `${k.slice(0, 6)}${'•'.repeat(10)}${k.slice(-4)}`;
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   body: { padding: 20, gap: 10 },
   flex: { flex: 1 },
-  label: { color: theme.colors.text, fontSize: 15, fontWeight: '700', marginTop: 8 },
+  h: { color: theme.colors.text, fontSize: 15, fontWeight: '700', marginTop: 16 },
   hint: { color: theme.colors.textDim, fontSize: 12, lineHeight: 17 },
+  row: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   input: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius,
@@ -127,16 +269,10 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     color: theme.colors.text,
     fontSize: 15,
-    padding: 14,
+    padding: 12,
   },
-  rowButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  status: { color: theme.colors.textDim, fontSize: 13, marginTop: 6 },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.colors.border,
-    marginVertical: 18,
-  },
-  modelRow: {
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border, marginVertical: 18 },
+  selectRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -146,10 +282,22 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     padding: 14,
   },
-  modelRowActive: { borderColor: theme.colors.accent },
-  modelLabel: { color: theme.colors.text, fontSize: 15, fontWeight: '600' },
+  selectRowActive: { borderColor: theme.colors.accent },
+  selectLabel: { color: theme.colors.text, fontSize: 15, fontWeight: '600' },
   radio: { color: theme.colors.accent, fontSize: 18 },
-  pressed: { opacity: 0.7 },
+  recipientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  recipientText: { color: theme.colors.text, fontSize: 14, flex: 1 },
+  remove: { color: theme.colors.danger, fontSize: 16, fontWeight: '700', paddingLeft: 12 },
   section: {
     padding: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
