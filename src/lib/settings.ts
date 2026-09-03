@@ -28,12 +28,19 @@ export interface Prefs {
   /** Reply-To for "Send through the app". Useful when From is a sending subdomain. */
   replyTo: string;
   recipients: string[];
+  /**
+   * Domains that belong to your own organisation. Mail to these addresses is
+   * always sent from your real mailbox (share sheet) instead of the email API —
+   * Microsoft 365 blocks API mail "from" your own domain family as phishing, no
+   * matter how well it is authenticated.
+   */
+  internalDomains: string[];
   /** Internal prefs schema version for one-time migrations. */
   _v?: number;
 }
 
 // Bump when a one-time migration is needed in applyMigrations().
-const PREFS_VERSION = 2;
+const PREFS_VERSION = 3;
 
 const DEFAULT_PREFS: Prefs = {
   model: DEFAULT_MODEL,
@@ -46,6 +53,7 @@ const DEFAULT_PREFS: Prefs = {
     'Accounts@blackhorsebeamish.co.uk',
     'Richard@aston.co.uk',
   ],
+  internalDomains: ['blackhorsebeamish.co.uk'],
   _v: PREFS_VERSION,
 };
 
@@ -71,7 +79,44 @@ function applyMigrations(p: Prefs): { prefs: Prefs; changed: boolean } {
     changed = true;
   }
 
+  if ((prefs._v ?? 1) < 3) {
+    // v3: internal recipients now route through the real mailbox (share sheet)
+    // instead of the email API, so Microsoft 365 stops flagging them as phishing.
+    prefs = {
+      ...prefs,
+      internalDomains:
+        Array.isArray(prefs.internalDomains) && prefs.internalDomains.length
+          ? prefs.internalDomains
+          : ['blackhorsebeamish.co.uk'],
+      _v: 3,
+    };
+    changed = true;
+  }
+
   return { prefs, changed };
+}
+
+/** True when `email` is on one of the configured internal (own-organisation) domains. */
+export function isInternalRecipient(prefs: Prefs, email: string): boolean {
+  const at = email.lastIndexOf('@');
+  if (at < 0) return false;
+  const domain = email.slice(at + 1).trim().toLowerCase();
+  if (!domain) return false;
+  return (prefs.internalDomains ?? []).some((d) => {
+    const dd = d.trim().toLowerCase().replace(/^@/, '');
+    return !!dd && (domain === dd || domain.endsWith(`.${dd}`));
+  });
+}
+
+/**
+ * The method a send should actually use for `recipient`, given the user's
+ * preference. "Send through the app" is downgraded to the share sheet for
+ * internal recipients (see Prefs.internalDomains). An explicit override on the
+ * SendEmail screen bypasses this.
+ */
+export function effectiveMethod(prefs: Prefs, recipient: string): EmailMethod {
+  if (prefs.emailMethod === 'app' && isInternalRecipient(prefs, recipient)) return 'share';
+  return prefs.emailMethod;
 }
 
 function normaliseMethod(v: unknown): EmailMethod {
@@ -92,6 +137,10 @@ async function readPrefs(): Promise<Prefs> {
         Array.isArray(parsed.recipients) && parsed.recipients.length
           ? (parsed.recipients as string[])
           : DEFAULT_PREFS.recipients,
+      internalDomains:
+        Array.isArray(parsed.internalDomains) && parsed.internalDomains.length
+          ? (parsed.internalDomains as string[])
+          : DEFAULT_PREFS.internalDomains,
     };
   } catch {
     return { ...DEFAULT_PREFS };

@@ -14,7 +14,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, BusyOverlay } from '../components/ui';
 import { sendEmail } from '../lib/email';
-import { getPrefs, methodReady, type EmailMethod, type Prefs } from '../lib/settings';
+import {
+  effectiveMethod,
+  getPrefs,
+  isInternalRecipient,
+  methodReady,
+  type EmailMethod,
+  type Prefs,
+} from '../lib/settings';
 import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
 
@@ -46,11 +53,19 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
 
   const method: EmailMethod = useMemo(() => {
     if (!prefs) return 'share';
-    const chosen = override ?? prefs.emailMethod;
+    // No manual override → auto-route: internal recipients go via the real
+    // mailbox (share sheet), not the email API (Microsoft 365 blocks it as phishing).
+    const chosen = override ?? effectiveMethod(prefs, to.trim());
     // "Send through the app" chosen but no key saved → fall back to the share sheet.
     if (chosen === 'app' && !keyReady) return 'share';
     return chosen;
-  }, [prefs, keyReady, override]);
+  }, [prefs, keyReady, override, to]);
+
+  const autoInternal =
+    !override &&
+    !!prefs &&
+    prefs.emailMethod === 'app' &&
+    isInternalRecipient(prefs, to.trim());
 
   const canAttach = method === 'app';
   const hasAttach = attachments.length > 0;
@@ -153,12 +168,19 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
           ) : null}
 
           <Text style={styles.label}>Send with</Text>
+          {autoInternal ? (
+            <Text style={styles.warn}>
+              {to.trim()} is an internal address — using the share sheet so it goes from your real
+              mailbox. Sending it through the app gets blocked by Microsoft 365 as phishing. Tap a
+              chip below to force a method.
+            </Text>
+          ) : null}
           <View style={styles.chips}>
             {(['app', 'outlook', 'share'] as EmailMethod[]).map((m) => (
               <Chip
                 key={m}
                 label={METHOD_LABEL[m]}
-                active={(override ?? prefs?.emailMethod) === m}
+                active={(override ?? method) === m}
                 onPress={() => setOverride(m)}
               />
             ))}

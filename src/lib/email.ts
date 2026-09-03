@@ -1,7 +1,7 @@
 import * as Linking from 'expo-linking';
 import * as FileSystem from 'expo-file-system/legacy';
 
-import { getEmailKey, getPrefs, type EmailMethod } from './settings';
+import { getEmailKey, getPrefs, isInternalRecipient, type EmailMethod } from './settings';
 import { shareFile } from './export';
 
 // The email API key is entered by the user; the provider is detected from its
@@ -148,9 +148,12 @@ export async function sendTestEmail(): Promise<{ ok: boolean; message: string }>
       body: 'Test email from the Scanner app. If you see this, sending works.',
       attachments: [],
     });
+    const internalNote = isInternalRecipient(prefs, to)
+      ? ` Note: ${to} is an internal address — Microsoft 365 may still quarantine this API test. Real sends to internal addresses now use the share sheet instead.`
+      : '';
     return {
       ok: true,
-      message: `${r.provider} accepted it (id ${r.id}). Sent to ${to} — check that inbox and spam.`,
+      message: `${r.provider} accepted it (id ${r.id}). Sent to ${to} — check that inbox and spam.${internalNote}`,
     };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : String(err) };

@@ -39,6 +39,7 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
   const [emailInput, setEmailInput] = useState('');
   const [emailSaved, setEmailSaved] = useState(false);
   const [newRecipient, setNewRecipient] = useState('');
+  const [newDomain, setNewDomain] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -101,6 +102,22 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
 
   const removeRecipient = async (e: string) => {
     if (prefs) await patch({ recipients: prefs.recipients.filter((r) => r !== e) });
+  };
+
+  const addDomain = async () => {
+    const d = newDomain.trim().toLowerCase().replace(/^@/, '');
+    if (!/^[^@\s]+\.[^@\s]+$/.test(d)) {
+      Alert.alert('Invalid', 'Enter a domain like blackhorsebeamish.co.uk.');
+      return;
+    }
+    if (prefs && !prefs.internalDomains.includes(d)) {
+      await patch({ internalDomains: [...prefs.internalDomains, d] });
+    }
+    setNewDomain('');
+  };
+
+  const removeDomain = async (d: string) => {
+    if (prefs) await patch({ internalDomains: prefs.internalDomains.filter((x) => x !== d) });
   };
 
   if (!prefs) return <SafeAreaView style={styles.safe} />;
@@ -194,11 +211,43 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
           </>
         ) : null}
 
+        <Text style={styles.h}>Internal domains</Text>
+        <Text style={styles.hint}>
+          Mail to addresses on these domains is sent from your real mailbox (share sheet) instead of
+          “Send through the app”. Microsoft 365 blocks API mail “from” your own domain family as
+          phishing however well it is authenticated, so this keeps internal delivery reliable.
+          External recipients still use your chosen method above.
+        </Text>
+        {prefs.internalDomains.map((d) => (
+          <View key={d} style={styles.recipientRow}>
+            <Text style={styles.recipientText} numberOfLines={1}>
+              {d}
+            </Text>
+            <Pressable onPress={() => removeDomain(d)} hitSlop={10}>
+              <Text style={styles.remove}>✕</Text>
+            </Pressable>
+          </View>
+        ))}
+        <View style={styles.row}>
+          <TextInput
+            style={[styles.input, styles.flex]}
+            value={newDomain}
+            onChangeText={setNewDomain}
+            placeholder="blackhorsebeamish.co.uk"
+            placeholderTextColor={theme.colors.textDim}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            onSubmitEditing={addDomain}
+          />
+          <Button title="Add" kind="secondary" onPress={addDomain} />
+        </View>
+
         <Text style={styles.h}>From</Text>
         <Text style={styles.hint}>
           For “Send through the app” this must be a verified sender / authenticated domain on your
           email service. To avoid Microsoft 365 quarantining mail “from” your own domain, send from
-          a subdomain (e.g. scanner@mail.blackhorsebeamish.co.uk) and set Reply-To below. For
+          a subdomain (e.g. scanner@scan.blackhorsebeamish.co.uk) and set Reply-To below. For
           Outlook this only applies if the address is an account already in Outlook.
         </Text>
         <TextInput
