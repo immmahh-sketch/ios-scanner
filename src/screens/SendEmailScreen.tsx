@@ -14,19 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, BusyOverlay } from '../components/ui';
 import { sendEmail } from '../lib/email';
-import {
-  DIRECT_EMAIL_METHODS,
-  directMethodReady,
-  getPrefs,
-  type EmailMethod,
-  type Prefs,
-} from '../lib/settings';
+import { getPrefs, methodReady, type EmailMethod, type Prefs } from '../lib/settings';
 import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
 
 const METHOD_LABEL: Record<EmailMethod, string> = {
-  resend: 'Send via Resend',
-  brevo: 'Send via Brevo',
+  app: 'Send through the app',
   outlook: 'Open in Outlook',
   share: 'Share sheet',
 };
@@ -46,18 +39,18 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
     getPrefs().then((p) => {
       setPrefs(p);
       if (!suggestedRecipient && p.recipients[0]) setTo(p.recipients[0]);
-      directMethodReady(p.emailMethod).then(setKeyReady);
+      methodReady(p.emailMethod).then(setKeyReady);
     });
   }, [suggestedRecipient]);
 
   const method: EmailMethod = useMemo(() => {
     if (!prefs) return 'share';
-    // Selected a direct provider but its key isn't saved → fall back to share sheet.
-    if (DIRECT_EMAIL_METHODS.includes(prefs.emailMethod) && !keyReady) return 'share';
+    // "Send through the app" chosen but no key saved → fall back to the share sheet.
+    if (prefs.emailMethod === 'app' && !keyReady) return 'share';
     return prefs.emailMethod;
   }, [prefs, keyReady]);
 
-  const canAttach = DIRECT_EMAIL_METHODS.includes(method);
+  const canAttach = method === 'app';
   const hasAttach = attachments.length > 0;
 
   const send = async () => {
@@ -68,7 +61,7 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
     setBusy(true);
     try {
       await sendEmail(method, { to: to.trim(), subject, body, attachments });
-      if (DIRECT_EMAIL_METHODS.includes(method)) {
+      if (method === 'app') {
         Alert.alert('Sent', `Emailed to ${to.trim()}.`);
       }
       navigation.goBack();
@@ -145,7 +138,8 @@ export function SendEmailScreen({ route, navigation }: ScreenProps<'SendEmail'>)
               {method === 'outlook' ? (
                 <Text style={styles.warn}>
                   Outlook can&apos;t take an attachment from a link — it&apos;ll open the share sheet
-                  with the file instead. Use Brevo or Resend in Settings to send it directly.
+                  with the file instead. Choose “Send through the app” in Settings to send it
+                  directly.
                 </Text>
               ) : method === 'share' ? (
                 <Text style={styles.warn}>

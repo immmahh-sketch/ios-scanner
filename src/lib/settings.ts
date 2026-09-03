@@ -4,8 +4,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 // Secrets (API keys) live in the iOS Keychain via SecureStore and are only ever
 // sent to their own service. Non-secret prefs go in a plain JSON file.
 const ANTHROPIC_KEY_ITEM = 'anthropic_api_key';
-const RESEND_KEY_ITEM = 'resend_api_key';
-const BREVO_KEY_ITEM = 'brevo_api_key';
+const EMAIL_KEY_ITEM = 'email_api_key';
+// Older key items, read once so an already-saved key keeps working.
+const LEGACY_EMAIL_ITEMS = ['brevo_api_key', 'resend_api_key'];
 const PREFS_FILE = `${FileSystem.documentDirectory}settings.json`;
 
 export const MODELS = [
@@ -17,10 +18,7 @@ export const MODELS = [
 export type ModelId = (typeof MODELS)[number]['id'];
 export const DEFAULT_MODEL: ModelId = 'claude-opus-5';
 
-export type EmailMethod = 'resend' | 'brevo' | 'outlook' | 'share';
-
-/** Send methods that deliver directly with the attachment to the typed recipient. */
-export const DIRECT_EMAIL_METHODS: EmailMethod[] = ['resend', 'brevo'];
+export type EmailMethod = 'app' | 'outlook' | 'share';
 
 export interface Prefs {
   model: ModelId;
@@ -32,7 +30,7 @@ export interface Prefs {
 
 const DEFAULT_PREFS: Prefs = {
   model: DEFAULT_MODEL,
-  emailMethod: 'brevo',
+  emailMethod: 'app',
   fromName: '',
   fromEmail: 'gm@blackhorsebeamish.co.uk',
   recipients: [
@@ -42,17 +40,24 @@ const DEFAULT_PREFS: Prefs = {
   ],
 };
 
+function normaliseMethod(v: unknown): EmailMethod {
+  if (v === 'outlook' || v === 'share' || v === 'app') return v;
+  return 'app'; // older provider-named values collapse to the in-app sender
+}
+
 async function readPrefs(): Promise<Prefs> {
   try {
     const info = await FileSystem.getInfoAsync(PREFS_FILE);
     if (!info.exists) return { ...DEFAULT_PREFS };
-    const parsed = JSON.parse(await FileSystem.readAsStringAsync(PREFS_FILE)) as Partial<Prefs>;
+    const parsed = JSON.parse(await FileSystem.readAsStringAsync(PREFS_FILE)) as Record<string, unknown>;
     return {
       ...DEFAULT_PREFS,
       ...parsed,
-      recipients: Array.isArray(parsed.recipients) && parsed.recipients.length
-        ? parsed.recipients
-        : DEFAULT_PREFS.recipients,
+      emailMethod: normaliseMethod(parsed.emailMethod),
+      recipients:
+        Array.isArray(parsed.recipients) && parsed.recipients.length
+          ? (parsed.recipients as string[])
+          : DEFAULT_PREFS.recipients,
     };
   } catch {
     return { ...DEFAULT_PREFS };
@@ -73,13 +78,17 @@ export async function updatePrefs(patch: Partial<Prefs>): Promise<Prefs> {
   return next;
 }
 
-// --- Anthropic key ---
-export async function getApiKey(): Promise<string | null> {
+async function readItem(item: string): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync(ANTHROPIC_KEY_ITEM);
+    return await SecureStore.getItemAsync(item);
   } catch {
     return null;
   }
+}
+
+// --- Anthropic key ---
+export async function getApiKey(): Promise<string | null> {
+  return readItem(ANTHROPIC_KEY_ITEM);
 }
 export async function setApiKey(key: string): Promise<void> {
   const t = key.trim();
@@ -90,48 +99,31 @@ export async function hasApiKey(): Promise<boolean> {
   return (await getApiKey())?.length ? true : false;
 }
 
-// --- Resend key ---
-export async function getResendKey(): Promise<string | null> {
-  try {
-    return await SecureStore.getItemAsync(RESEND_KEY_ITEM);
-  } catch {
-    return null;
+// --- Email sending key (service auto-detected from the key format) ---
+export async function getEmailKey(): Promise<string | null> {
+  const primary = await readItem(EMAIL_KEY_ITEM);
+  if (primary) return primary;
+  for (const legacy of LEGACY_EMAIL_ITEMS) {
+    const v = await readItem(legacy);
+    if (v) return v;
   }
+  return null;
 }
-export async function setResendKey(key: string): Promise<void> {
+export async function setEmailKey(key: string): Promise<void> {
   const t = key.trim();
-  if (t) await SecureStore.setItemAsync(RESEND_KEY_ITEM, t);
-  else await SecureStore.deleteItemAsync(RESEND_KEY_ITEM);
+  if (t) await SecureStore.setItemAsync(EMAIL_KEY_ITEM, t);
+  else await SecureStore.deleteItemAsync(EMAIL_KEY_ITEM);
 }
-export async function hasResendKey(): Promise<boolean> {
-  return (await getResendKey())?.length ? true : false;
-}
-
-// --- Brevo key ---
-export async function getBrevoKey(): Promise<string | null> {
-  try {
-    return await SecureStore.getItemAsync(BREVO_KEY_ITEM);
-  } catch {
-    return null;
-  }
-}
-export async function setBrevoKey(key: string): Promise<void> {
-  const t = key.trim();
-  if (t) await SecureStore.setItemAsync(BREVO_KEY_ITEM, t);
-  else await SecureStore.deleteItemAsync(BREVO_KEY_ITEM);
-}
-export async function hasBrevoKey(): Promise<boolean> {
-  return (await getBrevoKey())?.length ? true : false;
+export async function hasEmailKey(): Promise<boolean> {
+  return (await getEmailKey())?.length ? true : false;
 }
 
-/** Whether the currently-selected direct method has its key saved. */
-export async function directMethodReady(method: EmailMethod): Promise<boolean> {
-  if (method === 'resend') return hasResendKey();
-  if (method === 'brevo') return hasBrevoKey();
-  return true;
+/** Whether the selected method is ready to send (the 'app' method needs a key). */
+export async function methodReady(method: EmailMethod): Promise<boolean> {
+  return method === 'app' ? hasEmailKey() : true;
 }
 
-// --- model (kept as thin wrappers for existing callers) ---
+// --- model (thin wrappers for existing callers) ---
 export async function getModel(): Promise<ModelId> {
   return (await readPrefs()).model;
 }

@@ -5,15 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, BusyOverlay } from '../components/ui';
 import {
   getApiKey,
-  getBrevoKey,
+  getEmailKey,
   getPrefs,
   hasApiKey,
-  hasBrevoKey,
-  hasResendKey,
+  hasEmailKey,
   MODELS,
   setApiKey,
-  setBrevoKey,
-  setResendKey,
+  setEmailKey,
   updatePrefs,
   type EmailMethod,
   type ModelId,
@@ -24,9 +22,12 @@ import { theme } from '../theme';
 import type { ScreenProps } from '../navigation';
 
 const EMAIL_METHODS: { id: EmailMethod; label: string; note: string }[] = [
-  { id: 'brevo', label: 'Brevo', note: 'Sends directly, with attachments. Needs a Brevo API key + verified sender.' },
-  { id: 'resend', label: 'Resend', note: 'Sends directly, with attachments. Needs a Resend API key.' },
-  { id: 'outlook', label: 'Outlook', note: 'Opens the Outlook app pre-filled. No attachments.' },
+  {
+    id: 'app',
+    label: 'Send through the app',
+    note: 'Sends directly with the attachment. Needs an email API key (below).',
+  },
+  { id: 'outlook', label: 'Open in Outlook', note: 'Opens Outlook pre-filled. No attachment.' },
   { id: 'share', label: 'Share sheet', note: 'iOS share sheet — attach the file, pick any app.' },
 ];
 
@@ -34,20 +35,17 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [anthropicInput, setAnthropicInput] = useState('');
   const [anthropicSaved, setAnthropicSaved] = useState(false);
-  const [resendInput, setResendInput] = useState('');
-  const [resendSaved, setResendSaved] = useState(false);
-  const [brevoInput, setBrevoInput] = useState('');
-  const [brevoSaved, setBrevoSaved] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [emailSaved, setEmailSaved] = useState(false);
   const [newRecipient, setNewRecipient] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     getPrefs().then(setPrefs);
     hasApiKey().then(setAnthropicSaved);
-    hasResendKey().then(setResendSaved);
-    hasBrevoKey().then(setBrevoSaved);
+    hasEmailKey().then(setEmailSaved);
     getApiKey().then((k) => k && setAnthropicInput(mask(k)));
-    getBrevoKey().then((k) => k && setBrevoInput(mask(k)));
+    getEmailKey().then((k) => k && setEmailInput(mask(k)));
   }, []);
 
   const patch = async (p: Partial<Prefs>) => setPrefs(await updatePrefs(p));
@@ -60,20 +58,12 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
     Alert.alert('Saved', 'Anthropic key stored in the Keychain.');
   };
 
-  const saveResend = async () => {
-    if (resendInput.includes('•')) return;
-    await setResendKey(resendInput);
-    setResendSaved(resendInput.trim().length > 0);
-    if (resendInput.trim()) setResendInput(mask(resendInput.trim()));
-    Alert.alert('Saved', 'Resend key stored in the Keychain.');
-  };
-
-  const saveBrevo = async () => {
-    if (brevoInput.includes('•')) return;
-    await setBrevoKey(brevoInput);
-    setBrevoSaved(brevoInput.trim().length > 0);
-    if (brevoInput.trim()) setBrevoInput(mask(brevoInput.trim()));
-    Alert.alert('Saved', 'Brevo key stored in the Keychain.');
+  const saveEmail = async () => {
+    if (emailInput.includes('•')) return;
+    await setEmailKey(emailInput);
+    setEmailSaved(emailInput.trim().length > 0);
+    if (emailInput.trim()) setEmailInput(mask(emailInput.trim()));
+    Alert.alert('Saved', 'Email key stored in the Keychain.');
   };
 
   const testAi = async () => {
@@ -102,9 +92,7 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
     if (prefs) await patch({ recipients: prefs.recipients.filter((r) => r !== e) });
   };
 
-  if (!prefs) {
-    return <SafeAreaView style={styles.safe} />;
-  }
+  if (!prefs) return <SafeAreaView style={styles.safe} />;
 
   return (
     <SafeAreaView style={styles.safe} edges={['left', 'right', 'bottom']}>
@@ -160,44 +148,26 @@ export function SettingsScreen({ navigation }: ScreenProps<'Settings'>) {
           />
         ))}
 
-        {prefs.emailMethod === 'brevo' ? (
+        {prefs.emailMethod === 'app' ? (
           <>
-            <Text style={styles.h}>Brevo API key</Text>
+            <Text style={styles.h}>Email API key</Text>
             <Text style={styles.hint}>
-              From app.brevo.com → SMTP &amp; API → API Keys (starts “xkeysib-”). The “From” address
-              below must be an authenticated sender / domain in Brevo.
+              An email-sending service key. The “From” address below must be a verified sender /
+              authenticated domain on that service.
             </Text>
             <TextInput
               style={styles.input}
-              value={brevoInput}
-              onChangeText={setBrevoInput}
-              placeholder="xkeysib-…"
+              value={emailInput}
+              onChangeText={setEmailInput}
+              placeholder="paste key"
               placeholderTextColor={theme.colors.textDim}
               autoCapitalize="none"
               autoCorrect={false}
-              secureTextEntry={!brevoInput.includes('•')}
-              onFocus={() => brevoInput.includes('•') && setBrevoInput('')}
+              secureTextEntry={!emailInput.includes('•')}
+              onFocus={() => emailInput.includes('•') && setEmailInput('')}
             />
-            <Button title={brevoSaved ? 'Update key' : 'Save key'} onPress={saveBrevo} />
-          </>
-        ) : prefs.emailMethod === 'resend' ? (
-          <>
-            <Text style={styles.h}>Resend API key</Text>
-            <Text style={styles.hint}>
-              From resend.com → API Keys. The “From” domain below must be verified in Resend.
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={resendInput}
-              onChangeText={setResendInput}
-              placeholder="re_…"
-              placeholderTextColor={theme.colors.textDim}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry={!resendInput.includes('•')}
-              onFocus={() => resendInput.includes('•') && setResendInput('')}
-            />
-            <Button title={resendSaved ? 'Update key' : 'Save key'} onPress={saveResend} />
+            <Button title={emailSaved ? 'Update key' : 'Save key'} onPress={saveEmail} />
+            <Text style={styles.status}>{emailSaved ? '● Key saved' : '○ No key'}</Text>
           </>
         ) : null}
 
@@ -297,6 +267,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   h: { color: theme.colors.text, fontSize: 15, fontWeight: '700', marginTop: 16 },
   hint: { color: theme.colors.textDim, fontSize: 12, lineHeight: 17 },
+  status: { color: theme.colors.textDim, fontSize: 13, marginTop: 4 },
   row: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   input: {
     backgroundColor: theme.colors.surface,
