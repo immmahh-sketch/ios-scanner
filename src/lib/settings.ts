@@ -28,20 +28,51 @@ export interface Prefs {
   /** Reply-To for "Send through the app". Useful when From is a sending subdomain. */
   replyTo: string;
   recipients: string[];
+  /** Internal prefs schema version for one-time migrations. */
+  _v?: number;
 }
+
+// Bump when a one-time migration is needed in applyMigrations().
+const PREFS_VERSION = 2;
 
 const DEFAULT_PREFS: Prefs = {
   model: DEFAULT_MODEL,
   emailMethod: 'app',
-  fromName: '',
-  fromEmail: 'gm@blackhorsebeamish.co.uk',
+  fromName: 'Black Horse Beamish',
+  fromEmail: 'scanner@scan.blackhorsebeamish.co.uk',
   replyTo: 'gm@blackhorsebeamish.co.uk',
   recipients: [
     'gm@blackhorsebeamish.co.uk',
     'Accounts@blackhorsebeamish.co.uk',
     'Richard@aston.co.uk',
   ],
+  _v: PREFS_VERSION,
 };
+
+/** One-time transforms for prefs saved by an older app version. */
+function applyMigrations(p: Prefs): { prefs: Prefs; changed: boolean } {
+  let prefs = p;
+  let changed = false;
+
+  if ((prefs._v ?? 1) < 2) {
+    // v2: send from the authenticated Brevo subdomain so Microsoft 365 stops
+    // quarantining mail "from" the primary domain as internal spoofing.
+    prefs = {
+      ...prefs,
+      fromEmail:
+        prefs.fromEmail === 'gm@blackhorsebeamish.co.uk' || !prefs.fromEmail
+          ? 'scanner@scan.blackhorsebeamish.co.uk'
+          : prefs.fromEmail,
+      fromName: prefs.fromName || 'Black Horse Beamish',
+      replyTo: prefs.replyTo || 'gm@blackhorsebeamish.co.uk',
+      emailMethod: 'app',
+      _v: 2,
+    };
+    changed = true;
+  }
+
+  return { prefs, changed };
+}
 
 function normaliseMethod(v: unknown): EmailMethod {
   if (v === 'outlook' || v === 'share' || v === 'app') return v;
@@ -72,7 +103,9 @@ async function writePrefs(prefs: Prefs): Promise<void> {
 }
 
 export async function getPrefs(): Promise<Prefs> {
-  return readPrefs();
+  const { prefs, changed } = applyMigrations(await readPrefs());
+  if (changed) await writePrefs(prefs);
+  return prefs;
 }
 
 export async function updatePrefs(patch: Partial<Prefs>): Promise<Prefs> {
